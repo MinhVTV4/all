@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Learning Simulator - All-in-One</title>
+    
+    <!-- Tích hợp Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Tích hợp Matter.js (vẫn giữ lại vì gói Vật lý sẽ cần) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+    
+    <!-- Tích hợp Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Tích hợp thư viện icon Lucide -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- Liên kết tới file CSS tùy chỉnh -->
+    <link rel="stylesheet" href="/styles/main.css">
+</head>
+<body class="bg-gray-900 font-sans text-gray-200 antialiased">
+
+    <div class="flex h-screen overflow-hidden">
+        <!-- ============================================ -->
+        <!-- KHU VỰC ĐIỀU KHIỂN - BÊN TRÁI -->
+        <!-- ============================================ -->
+        <aside class="w-[26rem] bg-gray-800/50 backdrop-blur-sm p-6 flex flex-col shadow-2xl z-20 border-r border-gray-700">
+            <div class="flex-shrink-0">
+                <h1 class="text-3xl font-extrabold text-blue-400 mb-2">AI Learning Simulator</h1>
+                <p class="text-sm text-gray-400 mb-2">Sử dụng ngôn ngữ tự nhiên để kiến tạo thế giới tri thức.</p>
+                
+                <!-- ** MỚI: Dropdown chọn chế độ ** -->
+                <div class="mt-4">
+                    <label for="mode-selector" class="block mb-2 text-sm font-medium text-gray-300">Lĩnh vực mô phỏng:</label>
+                    <select id="mode-selector" class="bg-gray-900 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5">
+                        <option value="physics" selected>Vật lý</option>
+                        <option value="chemistry">Hóa học (sắp có)</option>
+                        <option value="electronics">Mạch điện (sắp có)</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Khu vực nhập liệu -->
+            <div class="flex flex-col flex-grow mt-6">
+                <label for="promptInput" class="mb-2 font-semibold text-gray-300">Yêu cầu của bạn:</label>
+                <textarea id="promptInput" rows="5" class="w-full p-3 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition duration-200 text-gray-200 placeholder-gray-500" placeholder="Vẽ hình, nhấp vào để chỉnh thuộc tính, rồi gõ lệnh..."></textarea>
+                
+                <div class="grid grid-cols-2 gap-3 mt-4">
+                    <button id="clearButton" class="w-full bg-red-600/80 text-white font-bold py-3 px-4 rounded-lg hover:bg-red-600 active:bg-red-700 transition duration-200 flex items-center justify-center gap-2">
+                        <i data-lucide="trash-2" class="w-5 h-5"></i> Dọn dẹp
+                    </button>
+                    <button id="sendPromptButton" class="w-full bg-blue-600/90 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-600 active:bg-blue-700 transition duration-200 flex items-center justify-center disabled:bg-blue-400/50 disabled:cursor-not-allowed gap-2">
+                        <span id="buttonText">Tạo mô phỏng</span>
+                        <div id="buttonSpinner" class="hidden w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    </button>
+                </div>
+                <p id="statusMessage" class="mt-4 text-center text-sm text-gray-400 h-5"></p>
+
+                <!-- Bộ công cụ vẽ -->
+                <div class="mt-6">
+                    <h3 class="font-semibold text-gray-300 mb-3">Bộ công cụ</h3>
+                     <div id="drawing-tools-container" class="grid grid-cols-3 gap-2">
+                         <!-- Các công cụ vẽ sẽ được tải động ở đây -->
+                     </div>
+                </div>
+
+                <!-- Ví dụ gợi ý -->
+                <div id="example-prompts-container" class="mt-6">
+                    <h3 class="font-semibold text-gray-300 mb-3">Thử các ví dụ sau:</h3>
+                    <div id="example-prompts-list" class="grid grid-cols-2 gap-2 text-sm">
+                        <!-- Các ví dụ sẽ được tải động ở đây -->
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mt-auto pt-6 border-t border-gray-700">
+                <h2 class="text-lg font-semibold mb-3 text-gray-300">Thông số đối tượng</h2>
+                <div id="objectDetails" class="bg-gray-900 p-4 rounded-lg text-sm text-gray-400 space-y-2 h-32 overflow-y-auto">
+                    <p>Nhấp vào một đối tượng để xem chi tiết.</p>
+                </div>
+            </div>
+        </aside>
+
+        <!-- ============================================ -->
+        <!-- KHU VỰC HIỂN THỊ CHÍNH -->
+        <!-- ============================================ -->
+        <main class="flex-1 p-6 pb-20 flex flex-col gap-6 bg-gray-900/80 relative">
+            <div id="canvas-container" class="flex-1 bg-gray-800/30 rounded-xl shadow-lg overflow-hidden relative border border-gray-700"></div>
+            <div class="absolute top-10 left-1/2 -translate-x-1/2 bg-gray-800/60 backdrop-blur-md p-3 rounded-xl shadow-2xl flex items-center gap-6 border border-gray-700">
+                <button id="resetButton" class="p-3 rounded-full hover:bg-gray-700 transition"><i data-lucide="rotate-cw" class="w-6 h-6 text-gray-300"></i></button>
+                <button id="playPauseButton" class="p-3 bg-blue-600 rounded-full hover:bg-blue-500 transition shadow-lg"><i id="playPauseIcon" data-lucide="pause" class="w-8 h-8 text-white"></i></button>
+                <div class="flex items-center gap-3">
+                    <i data-lucide="timer" class="w-5 h-5 text-gray-400"></i>
+                    <input id="timeScaleSlider" type="range" min="0.1" max="2" step="0.1" value="1" class="w-32 cursor-pointer">
+                    <span id="timeScaleLabel" class="text-sm font-mono w-8">1.0x</span>
+                </div>
+            </div>
+        </main>
+        
+        <div id="bottom-panel" class="absolute bottom-0 left-0 right-0 h-1/3 bg-gray-800/80 backdrop-blur-md p-6 flex gap-6 z-10 rounded-t-xl shadow-2xl border-t border-gray-700 slide-up">
+            <button id="togglePanelButton" class="absolute -top-0 left-1/2 -translate-x-1/2 transform p-3 bg-gray-700 text-white rounded-b-lg hover:bg-gray-600 transition h-16 flex flex-col items-center justify-start pt-2">
+                <span class="text-xs mb-1">AI & Đồ thị</span>
+                <i id="toggleIcon" data-lucide="chevron-up" class="h-6 w-6 transform transition-transform"></i>
+            </button>
+            <div class="flex-1 flex flex-col">
+                 <h2 class="text-lg font-semibold mb-2 text-gray-300">Giải thích từ AI Gemini:</h2>
+                 <div id="responseContainer" class="flex-1 bg-gray-900 text-gray-300 font-mono p-4 rounded-xl shadow-inner overflow-y-auto text-sm border border-gray-700">
+                    <span class="text-gray-500">Hãy chọn lĩnh vực và ra lệnh cho AI!</span>
+                 </div>
+            </div>
+            <div class="flex-1 flex flex-col">
+                 <h2 class="text-lg font-semibold mb-2 text-gray-300">Biểu đồ động học:</h2>
+                 <div id="chartContainer" class="flex-1 bg-gray-900/50 p-2 rounded-xl shadow-inner overflow-hidden border border-gray-700">
+                     <canvas id="motionChart"></canvas>
+                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bảng thuộc tính cho hình vẽ -->
+    <div id="propertyPanel" class="hidden absolute bg-gray-700 p-4 rounded-lg shadow-xl z-50 w-64">
+        <h4 class="font-bold mb-3 text-white">Thuộc tính Vật thể</h4>
+        <div class="space-y-3 text-sm">
+            <div>
+                <label for="propLabel" class="block mb-1 text-gray-300">Nhãn (Tên định danh)</label>
+                <input type="text" id="propLabel" class="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white">
+            </div>
+            <div>
+                <label for="propMass" class="block mb-1 text-gray-300">Khối lượng (kg)</label>
+                <input type="number" id="propMass" class="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white">
+            </div>
+            <div>
+                <label for="propRestitution" class="block mb-1 text-gray-300">Độ đàn hồi (0-1)</label>
+                <input type="number" id="propRestitution" step="0.1" min="0" max="1" class="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white">
+            </div>
+            <div>
+                <label for="propFriction" class="block mb-1 text-gray-300">Ma sát (0-1)</label>
+                <input type="number" id="propFriction" step="0.1" min="0" max="1" class="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white">
+            </div>
+            <div class="flex items-center pt-2">
+                <input type="checkbox" id="propIsStatic" class="h-4 w-4 rounded border-gray-600 bg-gray-800 text-blue-500 focus:ring-blue-500">
+                <label for="propIsStatic" class="ml-2 text-gray-300">Là vật tĩnh (Is Static)</label>
+            </div>
+        </div>
+        <button id="closePropertyPanel" class="absolute top-2 right-2 text-gray-400 hover:text-white">
+            <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+    </div>
+
+    <!-- Tải file JavaScript chính của ứng dụng -->
+    <script type="module" src="/src/main.js"></script>
+</body>
+</html>
