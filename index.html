@@ -17,8 +17,8 @@
     <!-- Tích hợp thư viện icon Lucide -->
     <script src="https://unpkg.com/lucide@latest"></script>
 
-    <!-- Liên kết tới file CSS tùy chỉnh -->
-    <link rel="stylesheet" href="/styles/main.css">
+    <!-- **SỬA LỖI**: Thay đổi đường dẫn thành tương đối -->
+    <link rel="stylesheet" href="./styles/main.css">
 </head>
 <body class="bg-gray-900 font-sans text-gray-200 antialiased">
 
@@ -31,13 +31,13 @@
                 <h1 class="text-3xl font-extrabold text-blue-400 mb-2">AI Learning Simulator</h1>
                 <p class="text-sm text-gray-400 mb-2">Sử dụng ngôn ngữ tự nhiên để kiến tạo thế giới tri thức.</p>
                 
-                <!-- ** MỚI: Dropdown chọn chế độ ** -->
+                <!-- Dropdown chọn chế độ -->
                 <div class="mt-4">
                     <label for="mode-selector" class="block mb-2 text-sm font-medium text-gray-300">Lĩnh vực mô phỏng:</label>
                     <select id="mode-selector" class="bg-gray-900 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5">
                         <option value="physics" selected>Vật lý</option>
-                        <option value="chemistry">Hóa học (sắp có)</option>
-                        <option value="electronics">Mạch điện (sắp có)</option>
+                        <option value="chemistry" disabled>Hóa học (sắp có)</option>
+                        <option value="electronics" disabled>Mạch điện (sắp có)</option>
                     </select>
                 </div>
             </div>
@@ -149,7 +149,7 @@
         </button>
     </div>
 
-    <!-- Tải file JavaScript chính của ứng dụng -->
-    <script type="module" src="/src/main.js"></script>
+    <!-- **SỬA LỖI**: Thay đổi đường dẫn thành tương đối -->
+    <script type="module" src="./src/main.js"></script>
 </body>
 </html>
