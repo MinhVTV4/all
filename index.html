@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Learning Simulator - All-in-One</title>
+    <title>AI Physics Simulator v6.1 - Thruster Update</title>
     
     <!-- Tích hợp Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
 
-    <!-- Tích hợp Matter.js (vẫn giữ lại vì gói Vật lý sẽ cần) -->
+    <!-- Tích hợp Matter.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
     
     <!-- Tích hợp Chart.js -->
@@ -17,68 +17,237 @@
     <!-- Tích hợp thư viện icon Lucide -->
     <script src="https://unpkg.com/lucide@latest"></script>
 
-    <!-- **SỬA LỖI**: Thay đổi đường dẫn thành tương đối -->
-    <link rel="stylesheet" href="./styles/main.css">
-</head>
-<body class="bg-gray-900 font-sans text-gray-200 antialiased">
+    <!-- Tích hợp thư viện âm thanh Tone.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
 
-    <div class="flex h-screen overflow-hidden">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+    <script>
+      // Cấu hình màu sắc và font cho Tailwind
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Inter', 'sans-serif'],
+            },
+            colors: {
+              'primary': '#3b82f6',
+              'primary-hover': '#2563eb',
+              'secondary': '#1e293b',
+              'accent': '#ec4899',
+            }
+          }
+        }
+      }
+    </script>
+
+    <style>
+        /* CSS tùy chỉnh để cải thiện giao diện */
+        :root {
+            --sidebar-width: 26rem;
+        }
+        body {
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        #simulationCanvas { display: block; width: 100%; height: 100%; cursor: grab; }
+        #simulationCanvas.drawing-mode { cursor: crosshair; }
+        #simulationCanvas:active { cursor: grabbing; }
+        
+        /* Nâng cấp giao diện thanh trượt */
+        input[type=range] { -webkit-appearance: none; background: transparent; }
+        input[type=range]::-webkit-slider-runnable-track { height: 6px; background: #334155; border-radius: 3px; }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none; margin-top: -7px; width: 20px; height: 20px; background: var(--thumb-color, #3b82f6); cursor: pointer; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 5px rgba(0,0,0,0.3);
+            transition: transform 0.1s ease-in-out, box-shadow 0.1s ease-in-out;
+        }
+        input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.1); box-shadow: 0 0 10px var(--thumb-color, #3b82f6); }
+
+        /* Nâng cấp giao diện nút công cụ */
+        .draw-tool.active { background-color: #3b82f6; color: white; box-shadow: 0 0 10px rgba(59, 130, 246, 0.5); }
+        .example-prompt:hover { transform: translateY(-2px); box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2); }
+        
+        /* Hiệu ứng cho nút bấm */
+        .btn { transition: all 0.2s ease-in-out; }
+        .btn:hover { transform: scale(1.05); filter: brightness(1.1); }
+        .btn:active { transform: scale(0.98); filter: brightness(0.95); }
+        
+        /* Scrollbar tùy chỉnh */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #1e293b; }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+        
+        /* Giao diện Modal và Card */
+        .modal-backdrop { background-color: rgba(15, 23, 42, 0.8); backdrop-filter: blur(8px); }
+        .card {
+            background-color: rgba(30, 41, 59, 0.7);
+            border: 1px solid rgba(71, 85, 105, 0.5);
+            border-radius: 0.75rem;
+            backdrop-filter: blur(12px);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+
+        /* Responsive Design */
+        @media (max-width: 1024px) {
+            #left-sidebar {
+                position: fixed;
+                left: 0;
+                top: 0;
+                height: 100%;
+                transform: translateX(calc(-1 * var(--sidebar-width)));
+                transition: transform 0.3s ease-in-out;
+                z-index: 100;
+            }
+            #left-sidebar.open {
+                transform: translateX(0);
+            }
+            #main-content {
+                padding-left: 1rem;
+            }
+            #sidebar-backdrop {
+                position: fixed;
+                inset: 0;
+                background-color: rgba(0,0,0,0.5);
+                z-index: 99;
+            }
+        }
+    </style>
+</head>
+<body class="bg-secondary font-sans text-slate-200 antialiased overflow-hidden">
+
+    <!-- Nút mở Sidebar trên mobile -->
+    <button id="openSidebarButton" class="lg:hidden fixed top-4 left-4 z-50 p-2 bg-slate-700/80 rounded-md btn">
+        <i data-lucide="menu" class="w-6 h-6 text-white"></i>
+    </button>
+    <div id="sidebar-backdrop" class="hidden lg:hidden"></div>
+
+    <!-- Modal Hướng dẫn -->
+    <div id="tutorialModal" class="fixed inset-0 z-[120] flex items-center justify-center p-4 modal-backdrop hidden">
+        <div class="card w-full max-w-2xl transform transition-all" role="dialog">
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-2xl font-bold text-white flex items-center gap-2"><i data-lucide="book-open" class="text-primary"></i> Hướng dẫn sử dụng</h3>
+                    <button id="closeTutorialButton" class="p-2 rounded-full hover:bg-slate-700"><i data-lucide="x" class="w-5 h-5"></i></button>
+                </div>
+                <div class="text-slate-300 space-y-4 max-h-[70vh] overflow-y-auto pr-2">
+                    <div>
+                        <h4 class="font-semibold text-primary mb-1">1. Tương tác với AI</h4>
+                        <p>Nhập yêu cầu bằng ngôn ngữ tự nhiên vào ô "Yêu cầu của bạn" (ví dụ: "tạo một con lắc đơn dài 2m") rồi nhấn nút "Tạo mô phỏng". AI sẽ tự động phân tích và tạo ra các vật thể tương ứng.</p>
+                    </div>
+                    <div>
+                        <h4 class="font-semibold text-primary mb-1">2. Công cụ vẽ</h4>
+                        <p>Sử dụng "Bộ công cụ vẽ" để tự tay thiết kế kịch bản. Sau khi vẽ xong, bạn có thể ra lệnh cho AI (ví dụ: "biến hình vẽ thành vật thể") để AI chuyển chúng thành các đối tượng vật lý.</p>
+                    </div>
+                     <div>
+                        <h4 class="font-semibold text-primary mb-1">3. Điều khiển Camera</h4>
+                        <ul class="list-disc list-inside space-y-1 pl-2">
+                            <li><strong class="text-white">Phóng to/Thu nhỏ (Zoom):</strong> Dùng con lăn chuột.</li>
+                            <li><strong class="text-white">Di chuyển (Pan):</strong> Giữ chuột phải và kéo.</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h4 class="font-semibold text-primary mb-1">4. Tương tác với Vật thể</h4>
+                        <ul class="list-disc list-inside space-y-1 pl-2">
+                            <li><strong class="text-white">Di chuyển:</strong> Dùng chuột trái kéo/thả các vật thể.</li>
+                            <li><strong class="text-white">Xem thông số & Chỉnh sửa:</strong> Nhấp chuột trái vào một vật thể. Bảng thông số chi tiết sẽ hiện ở góc dưới bên trái, cho phép bạn xem và chỉnh sửa các thuộc tính như khối lượng, lực đẩy...</li>
+                            <li><strong class="text-white">Chọn nhiều vật thể:</strong> Giữ phím <kbd class="px-2 py-1 text-xs font-semibold text-gray-800 bg-gray-100 border border-gray-200 rounded-lg">Shift</kbd> và nhấp vào nhiều vật thể để so sánh chúng trên cùng một biểu đồ.</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h4 class="font-semibold text-primary mb-1">5. Lưu & Tải Kịch bản</h4>
+                        <p>Sử dụng nút <i data-lucide="folder-open" class="inline-block w-4 h-4"></i> (Quản lý Kịch bản) ở góc trên bên phải để lưu lại các thiết kế của bạn và tải lại chúng sau này.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Modal Xác nhận -->
+    <div id="confirmationModal" class="fixed inset-0 z-[110] flex items-center justify-center p-4 modal-backdrop hidden">
+        <div class="card w-full max-w-md transform transition-all" role="dialog">
+            <div class="p-6 text-center">
+                <i data-lucide="alert-triangle" class="mx-auto h-12 w-12 text-yellow-400"></i>
+                <h3 id="confirmationTitle" class="mt-4 text-xl font-bold text-white">Xác nhận hành động</h3>
+                <p id="confirmationMessage" class="mt-2 text-slate-300">Bạn có chắc chắn muốn tiếp tục?</p>
+                <div class="mt-6 flex justify-center gap-4">
+                    <button id="confirmCancelButton" class="btn w-full bg-slate-600 text-white font-bold py-2 px-4 rounded-lg">Hủy bỏ</button>
+                    <button id="confirmActionButton" class="btn w-full bg-red-600 text-white font-bold py-2 px-4 rounded-lg">Xác nhận</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="flex h-screen">
         <!-- ============================================ -->
         <!-- KHU VỰC ĐIỀU KHIỂN - BÊN TRÁI -->
         <!-- ============================================ -->
-        <aside class="w-[26rem] bg-gray-800/50 backdrop-blur-sm p-6 flex flex-col shadow-2xl z-20 border-r border-gray-700">
-            <div class="flex-shrink-0">
-                <h1 class="text-3xl font-extrabold text-blue-400 mb-2">AI Learning Simulator</h1>
-                <p class="text-sm text-gray-400 mb-2">Sử dụng ngôn ngữ tự nhiên để kiến tạo thế giới tri thức.</p>
-                
-                <!-- Dropdown chọn chế độ -->
-                <div class="mt-4">
-                    <label for="mode-selector" class="block mb-2 text-sm font-medium text-gray-300">Lĩnh vực mô phỏng:</label>
-                    <select id="mode-selector" class="bg-gray-900 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5">
-                        <option value="physics" selected>Vật lý</option>
-                        <option value="chemistry" disabled>Hóa học (sắp có)</option>
-                        <option value="electronics" disabled>Mạch điện (sắp có)</option>
-                    </select>
-                </div>
+        <aside id="left-sidebar" style="--sidebar-width: 26rem;" class="w-[var(--sidebar-width)] bg-slate-800/60 p-6 flex flex-col shadow-2xl border-r border-slate-700">
+            <div class="flex-shrink-0 mb-6 flex justify-between items-center">
+                <h1 class="text-2xl font-black text-white tracking-tighter">AI Physics <span class="text-primary">Simulator</span></h1>
+                <span class="text-xs bg-primary/50 text-white font-bold px-2 py-1 rounded-full">v6.1</span>
             </div>
 
             <!-- Khu vực nhập liệu -->
-            <div class="flex flex-col flex-grow mt-6">
-                <label for="promptInput" class="mb-2 font-semibold text-gray-300">Yêu cầu của bạn:</label>
-                <textarea id="promptInput" rows="5" class="w-full p-3 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition duration-200 text-gray-200 placeholder-gray-500" placeholder="Vẽ hình, nhấp vào để chỉnh thuộc tính, rồi gõ lệnh..."></textarea>
-                
-                <div class="grid grid-cols-2 gap-3 mt-4">
-                    <button id="clearButton" class="w-full bg-red-600/80 text-white font-bold py-3 px-4 rounded-lg hover:bg-red-600 active:bg-red-700 transition duration-200 flex items-center justify-center gap-2">
-                        <i data-lucide="trash-2" class="w-5 h-5"></i> Dọn dẹp
-                    </button>
-                    <button id="sendPromptButton" class="w-full bg-blue-600/90 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-600 active:bg-blue-700 transition duration-200 flex items-center justify-center disabled:bg-blue-400/50 disabled:cursor-not-allowed gap-2">
-                        <span id="buttonText">Tạo mô phỏng</span>
-                        <div id="buttonSpinner" class="hidden w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    </button>
+            <div class="flex flex-col flex-grow overflow-y-auto pr-2 -mr-2 space-y-6">
+                <!-- Card Nhập liệu chính -->
+                <div class="card p-4">
+                    <label for="promptInput" class="mb-2 font-semibold text-slate-300">Yêu cầu của bạn:</label>
+                    <textarea id="promptInput" rows="7" class="w-full p-3 bg-slate-900 border border-slate-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition duration-200 text-slate-200 placeholder-slate-500 resize-none" placeholder="Vẽ hình, nhấp vào để chỉnh thuộc tính, rồi gõ lệnh..."></textarea>
+                    
+                    <div class="grid grid-cols-2 gap-3 mt-4">
+                        <button id="clearButton" class="btn w-full bg-red-600/80 text-white font-bold py-3 px-4 rounded-lg hover:bg-red-600 flex items-center justify-center gap-2">
+                            <i data-lucide="trash-2" class="w-5 h-5"></i> Dọn dẹp
+                        </button>
+                        <button id="sendPromptButton" class="btn w-full bg-primary text-white font-bold py-3 px-4 rounded-lg hover:bg-primary-hover flex items-center justify-center disabled:bg-blue-400/50 disabled:cursor-not-allowed gap-2">
+                            <span id="buttonText">Tạo mô phỏng</span>
+                            <div id="buttonSpinner" class="hidden w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        </button>
+                    </div>
+                    <p id="statusMessage" class="mt-4 text-center text-sm text-slate-400 h-5"></p>
                 </div>
-                <p id="statusMessage" class="mt-4 text-center text-sm text-gray-400 h-5"></p>
 
-                <!-- Bộ công cụ vẽ -->
-                <div class="mt-6">
-                    <h3 class="font-semibold text-gray-300 mb-3">Bộ công cụ</h3>
-                     <div id="drawing-tools-container" class="grid grid-cols-3 gap-2">
-                         <!-- Các công cụ vẽ sẽ được tải động ở đây -->
+                <!-- Card Công cụ vẽ -->
+                <div class="card p-4">
+                    <div class="flex justify-between items-center mb-3">
+                        <h3 class="font-semibold text-slate-300">Bộ công cụ vẽ</h3>
+                        <button id="clearDrawingsButton" class="text-xs text-slate-400 hover:text-white transition flex items-center gap-1" title="Xóa các hình đã vẽ">
+                            <i data-lucide="eraser" class="w-4 h-4"></i> Xóa hình vẽ
+                        </button>
+                    </div>
+                     <div class="grid grid-cols-4 gap-2">
+                         <button class="draw-tool p-3 rounded-lg bg-slate-700/50 hover:bg-slate-700 flex flex-col items-center gap-1 text-xs" data-tool="freeform" title="Vẽ Tự do"><i data-lucide="pencil" class="w-5 h-5"></i><span>Tự do</span></button>
+                         <button class="draw-tool p-3 rounded-lg bg-slate-700/50 hover:bg-slate-700 flex flex-col items-center gap-1 text-xs" data-tool="box" title="Vẽ Hộp"><i data-lucide="square" class="w-5 h-5"></i><span>Hộp</span></button>
+                         <button class="draw-tool p-3 rounded-lg bg-slate-700/50 hover:bg-slate-700 flex flex-col items-center gap-1 text-xs" data-tool="circle" title="Vẽ Bóng"><i data-lucide="circle" class="w-5 h-5"></i><span>Bóng</span></button>
+                         <button class="draw-tool p-3 rounded-lg bg-slate-700/50 hover:bg-slate-700 flex flex-col items-center gap-1 text-xs" data-tool="wall" title="Vẽ Tường"><i data-lucide="ruler" class="w-5 h-5"></i><span>Tường</span></button>
+                         <button class="draw-tool p-3 rounded-lg bg-slate-700/50 hover:bg-slate-700 flex flex-col items-center gap-1 text-xs" data-tool="joint" title="Nối vật thể"><i data-lucide="link" class="w-5 h-5"></i><span>Khớp</span></button>
+                         <button class="draw-tool p-3 rounded-lg bg-slate-700/50 hover:bg-slate-700 flex flex-col items-center gap-1 text-xs" data-tool="spring" title="Tạo Lò xo"><i data-lucide="git-commit-vertical" class="w-5 h-5"></i><span>Lò xo</span></button>
+                         <button class="draw-tool p-3 rounded-lg bg-slate-700/50 hover:bg-slate-700 flex flex-col items-center gap-1 text-xs" data-tool="motor" title="Tạo Động cơ"><i data-lucide="settings-2" class="w-5 h-5"></i><span>Động cơ</span></button>
                      </div>
                 </div>
 
-                <!-- Ví dụ gợi ý -->
-                <div id="example-prompts-container" class="mt-6">
-                    <h3 class="font-semibold text-gray-300 mb-3">Thử các ví dụ sau:</h3>
-                    <div id="example-prompts-list" class="grid grid-cols-2 gap-2 text-sm">
-                        <!-- Các ví dụ sẽ được tải động ở đây -->
+                <!-- Card Ví dụ -->
+                <div id="example-prompts-container" class="card p-4">
+                    <h3 class="font-semibold text-slate-300 mb-3">Thử các ví dụ sau:</h3>
+                    <div class="grid grid-cols-2 gap-2 text-sm">
+                        <button class="example-prompt bg-slate-700/50 hover:bg-slate-700 p-2 rounded-lg text-left transition">Con lắc đơn</button>
+                        <button class="example-prompt bg-slate-700/50 hover:bg-slate-700 p-2 rounded-lg text-left transition">Hệ đòn bẩy</button>
+                        <button class="example-prompt bg-slate-700/50 hover:bg-slate-700 p-2 rounded-lg text-left transition">Va chạm đàn hồi</button>
+                        <button class="example-prompt bg-slate-700/50 hover:bg-slate-700 p-2 rounded-lg text-left transition">Hệ Ròng Rọc</button>
+                        <button class="example-prompt bg-slate-700/50 hover:bg-slate-700 p-2 rounded-lg text-left transition">Sóng Cơ</button>
+                        <button class="example-prompt bg-slate-700/50 hover:bg-slate-700 p-2 rounded-lg text-left transition">Con lắc Newton</button>
                     </div>
                 </div>
             </div>
             
-            <div class="mt-auto pt-6 border-t border-gray-700">
-                <h2 class="text-lg font-semibold mb-3 text-gray-300">Thông số đối tượng</h2>
-                <div id="objectDetails" class="bg-gray-900 p-4 rounded-lg text-sm text-gray-400 space-y-2 h-32 overflow-y-auto">
-                    <p>Nhấp vào một đối tượng để xem chi tiết.</p>
+            <div class="mt-auto pt-6 border-t border-slate-700 flex-shrink-0">
+                <h2 class="text-lg font-semibold mb-3 text-slate-300">Thông số & Điều khiển</h2>
+                <div id="objectDetails" class="bg-slate-900 p-4 rounded-lg text-sm text-slate-400 space-y-2 h-48 overflow-y-auto">
+                    <div class="flex items-center justify-center h-full text-slate-500">Nhấp vào một đối tượng động để xem chi tiết.</div>
                 </div>
             </div>
         </aside>
@@ -86,33 +255,67 @@
         <!-- ============================================ -->
         <!-- KHU VỰC HIỂN THỊ CHÍNH -->
         <!-- ============================================ -->
-        <main class="flex-1 p-6 pb-20 flex flex-col gap-6 bg-gray-900/80 relative">
-            <div id="canvas-container" class="flex-1 bg-gray-800/30 rounded-xl shadow-lg overflow-hidden relative border border-gray-700"></div>
-            <div class="absolute top-10 left-1/2 -translate-x-1/2 bg-gray-800/60 backdrop-blur-md p-3 rounded-xl shadow-2xl flex items-center gap-6 border border-gray-700">
-                <button id="resetButton" class="p-3 rounded-full hover:bg-gray-700 transition"><i data-lucide="rotate-cw" class="w-6 h-6 text-gray-300"></i></button>
-                <button id="playPauseButton" class="p-3 bg-blue-600 rounded-full hover:bg-blue-500 transition shadow-lg"><i id="playPauseIcon" data-lucide="pause" class="w-8 h-8 text-white"></i></button>
-                <div class="flex items-center gap-3">
-                    <i data-lucide="timer" class="w-5 h-5 text-gray-400"></i>
-                    <input id="timeScaleSlider" type="range" min="0.1" max="2" step="0.1" value="1" class="w-32 cursor-pointer">
+        <main id="main-content" class="flex-1 p-6 pb-20 flex flex-col gap-6 bg-secondary/80 relative lg:pl-0">
+            <div id="canvas-container" class="flex-1 bg-slate-800/30 rounded-xl shadow-lg overflow-hidden relative border border-slate-700"></div>
+            
+            <!-- Bảng điều khiển chính -->
+            <div class="absolute top-8 left-1/2 -translate-x-1/2 card p-3 flex items-center gap-6 z-10">
+                <button id="resetButton" class="btn p-3 rounded-full hover:bg-slate-700 transition" title="Đặt lại trạng thái"><i data-lucide="rotate-cw" class="w-6 h-6 text-slate-300"></i></button>
+                <button id="playPauseButton" class="btn p-3 bg-primary rounded-full hover:bg-primary-hover transition shadow-lg" title="Chạy/Dừng"><i id="playPauseIcon" data-lucide="pause" class="w-8 h-8 text-white"></i></button>
+                <button id="worldSettingsButton" class="btn p-3 rounded-full hover:bg-slate-700 transition" title="Thiết lập môi trường"><i data-lucide="globe-2" class="w-6 h-6 text-slate-300"></i></button>
+            </div>
+
+            <!-- Bảng điều khiển môi trường -->
+            <div id="worldSettingsPanel" class="absolute top-28 left-1/2 -translate-x-1/2 card p-4 flex flex-col gap-4 z-10 w-64 hidden">
+                <h4 class="text-sm font-semibold text-center text-slate-300">Thiết lập Môi trường</h4>
+                <div class="flex items-center gap-3" style="--thumb-color: #f59e0b;">
+                    <i data-lucide="timer" class="w-5 h-5 text-slate-400" title="Tốc độ mô phỏng"></i>
+                    <input id="timeScaleSlider" type="range" min="0.1" max="2" step="0.1" value="1" class="w-full cursor-pointer">
                     <span id="timeScaleLabel" class="text-sm font-mono w-8">1.0x</span>
                 </div>
+                <div class="flex items-center gap-3" style="--thumb-color: #22c55e;">
+                    <i data-lucide="arrow-down" class="w-5 h-5 text-slate-400" title="Trọng lực Y"></i>
+                    <input id="gravityYSlider" type="range" min="-2" max="2" step="0.1" value="1" class="w-full cursor-pointer">
+                    <span id="gravityYLabel" class="text-sm font-mono w-8 text-right">1.0</span>
+                </div>
+                <div class="flex items-center gap-3" style="--thumb-color: #22c55e;">
+                    <i data-lucide="arrow-right" class="w-5 h-5 text-slate-400" title="Trọng lực X"></i>
+                    <input id="gravityXSlider" type="range" min="-2" max="2" step="0.1" value="0" class="w-full cursor-pointer">
+                    <span id="gravityXLabel" class="text-sm font-mono w-8 text-right">0.0</span>
+                </div>
+                 <div class="flex items-center gap-3" style="--thumb-color: #60a5fa;">
+                    <i data-lucide="wind" class="w-5 h-5 text-slate-400" title="Lực cản không khí"></i>
+                    <input id="airFrictionSlider" type="range" min="0" max="0.1" step="0.005" value="0.01" class="w-full cursor-pointer">
+                    <span id="airFrictionLabel" class="text-sm font-mono w-12 text-right">0.01</span>
+                </div>
+                <div class="flex items-center justify-between pt-2">
+                    <label for="trailToggle" class="text-sm text-slate-300">Vẽ quỹ đạo</label>
+                    <input type="checkbox" id="trailToggle" class="h-4 w-4 rounded border-slate-600 bg-slate-800 text-primary focus:ring-primary">
+                </div>
+            </div>
+
+             <!-- Bảng điều khiển Phụ -->
+            <div class="absolute top-8 right-8 card p-3 flex items-center gap-2 z-10">
+                <button id="openTutorialButton" class="btn p-3 rounded-full hover:bg-slate-700 transition" title="Hướng dẫn"><i data-lucide="help-circle" class="w-6 h-6 text-slate-300"></i></button>
+                <button id="openSceneManager" class="btn p-3 rounded-full hover:bg-slate-700 transition" title="Quản lý Kịch bản"><i data-lucide="folder-open" class="w-6 h-6 text-slate-300"></i></button>
             </div>
         </main>
         
-        <div id="bottom-panel" class="absolute bottom-0 left-0 right-0 h-1/3 bg-gray-800/80 backdrop-blur-md p-6 flex gap-6 z-10 rounded-t-xl shadow-2xl border-t border-gray-700 slide-up">
-            <button id="togglePanelButton" class="absolute -top-0 left-1/2 -translate-x-1/2 transform p-3 bg-gray-700 text-white rounded-b-lg hover:bg-gray-600 transition h-16 flex flex-col items-center justify-start pt-2">
+        <!-- Bảng điều khiển dưới -->
+        <div id="bottom-panel" class="absolute bottom-0 left-0 right-0 h-1/3 bg-slate-800/80 backdrop-blur-md p-6 flex flex-col lg:flex-row gap-6 z-10 rounded-t-xl shadow-2xl border-t border-slate-700 transform translate-y-[calc(100%-4rem)] transition-transform duration-300 ease-in-out">
+            <button id="togglePanelButton" class="absolute -top-0 left-1/2 -translate-x-1/2 transform p-3 bg-slate-700 text-white rounded-b-lg hover:bg-slate-600 transition h-16 flex flex-col items-center justify-start pt-2">
                 <span class="text-xs mb-1">AI & Đồ thị</span>
                 <i id="toggleIcon" data-lucide="chevron-up" class="h-6 w-6 transform transition-transform"></i>
             </button>
             <div class="flex-1 flex flex-col">
-                 <h2 class="text-lg font-semibold mb-2 text-gray-300">Giải thích từ AI Gemini:</h2>
-                 <div id="responseContainer" class="flex-1 bg-gray-900 text-gray-300 font-mono p-4 rounded-xl shadow-inner overflow-y-auto text-sm border border-gray-700">
-                    <span class="text-gray-500">Hãy chọn lĩnh vực và ra lệnh cho AI!</span>
+                 <h2 class="text-lg font-semibold mb-2 text-slate-300">Giải thích từ AI Gemini:</h2>
+                 <div id="responseContainer" class="flex-1 bg-slate-900 text-slate-300 font-mono p-4 rounded-xl shadow-inner overflow-y-auto text-sm border border-slate-700">
+                    <span class="text-slate-500">Hãy ra lệnh cho AI để bắt đầu!</span>
                  </div>
             </div>
             <div class="flex-1 flex flex-col">
-                 <h2 class="text-lg font-semibold mb-2 text-gray-300">Biểu đồ động học:</h2>
-                 <div id="chartContainer" class="flex-1 bg-gray-900/50 p-2 rounded-xl shadow-inner overflow-hidden border border-gray-700">
+                 <h2 class="text-lg font-semibold mb-2 text-slate-300">Biểu đồ động học:</h2>
+                 <div id="chartContainer" class="flex-1 bg-slate-900/50 p-2 rounded-xl shadow-inner overflow-hidden border border-slate-700">
                      <canvas id="motionChart"></canvas>
                  </div>
             </div>
@@ -120,36 +323,1567 @@
     </div>
 
     <!-- Bảng thuộc tính cho hình vẽ -->
-    <div id="propertyPanel" class="hidden absolute bg-gray-700 p-4 rounded-lg shadow-xl z-50 w-64">
+    <div id="propertyPanel" class="hidden absolute card p-4 z-50 w-72">
         <h4 class="font-bold mb-3 text-white">Thuộc tính Vật thể</h4>
-        <div class="space-y-3 text-sm">
+        <div class="space-y-3 text-sm max-h-64 overflow-y-auto pr-2">
             <div>
-                <label for="propLabel" class="block mb-1 text-gray-300">Nhãn (Tên định danh)</label>
-                <input type="text" id="propLabel" class="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white">
+                <label for="propLabel" class="block mb-1 text-slate-300">Nhãn (Tên định danh)</label>
+                <input type="text" id="propLabel" class="w-full p-2 bg-slate-800 border border-slate-600 rounded text-white">
             </div>
             <div>
-                <label for="propMass" class="block mb-1 text-gray-300">Khối lượng (kg)</label>
-                <input type="number" id="propMass" class="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white">
+                <label for="propMass" class="block mb-1 text-slate-300">Khối lượng (kg)</label>
+                <input type="number" id="propMass" class="w-full p-2 bg-slate-800 border border-slate-600 rounded text-white">
             </div>
             <div>
-                <label for="propRestitution" class="block mb-1 text-gray-300">Độ đàn hồi (0-1)</label>
-                <input type="number" id="propRestitution" step="0.1" min="0" max="1" class="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white">
+                <label for="propRestitution" class="block mb-1 text-slate-300">Độ đàn hồi (0-1)</label>
+                <input type="number" id="propRestitution" step="0.1" min="0" max="1" class="w-full p-2 bg-slate-800 border border-slate-600 rounded text-white">
             </div>
             <div>
-                <label for="propFriction" class="block mb-1 text-gray-300">Ma sát (0-1)</label>
-                <input type="number" id="propFriction" step="0.1" min="0" max="1" class="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white">
+                <label for="propFriction" class="block mb-1 text-slate-300">Ma sát (0-1)</label>
+                <input type="number" id="propFriction" step="0.1" min="0" max="1" class="w-full p-2 bg-slate-800 border border-slate-600 rounded text-white">
+            </div>
+            <div class="pt-2 border-t border-slate-700/50">
+                <label class="block mb-1 text-slate-300 font-semibold">Lực đẩy (Thruster)</label>
+                 <div class="flex gap-2">
+                    <div>
+                        <label for="propThrusterX" class="text-xs text-slate-400">Force X</label>
+                        <input type="number" id="propThrusterX" step="0.001" placeholder="0" class="w-full p-2 bg-slate-800 border border-slate-600 rounded text-white">
+                    </div>
+                    <div>
+                        <label for="propThrusterY" class="text-xs text-slate-400">Force Y</label>
+                        <input type="number" id="propThrusterY" step="0.001" placeholder="0" class="w-full p-2 bg-slate-800 border border-slate-600 rounded text-white">
+                    </div>
+                 </div>
+                 <p class="text-xs text-slate-500 mt-1">Lực đẩy liên tục theo trục của vật.</p>
             </div>
             <div class="flex items-center pt-2">
-                <input type="checkbox" id="propIsStatic" class="h-4 w-4 rounded border-gray-600 bg-gray-800 text-blue-500 focus:ring-blue-500">
-                <label for="propIsStatic" class="ml-2 text-gray-300">Là vật tĩnh (Is Static)</label>
+                <input type="checkbox" id="propIsStatic" class="h-4 w-4 rounded border-slate-600 bg-slate-800 text-primary focus:ring-primary">
+                <label for="propIsStatic" class="ml-2 text-slate-300">Là vật tĩnh (Is Static)</label>
             </div>
         </div>
-        <button id="closePropertyPanel" class="absolute top-2 right-2 text-gray-400 hover:text-white">
-            <i data-lucide="x" class="w-5 h-5"></i>
-        </button>
+        <div class="flex justify-between mt-4">
+             <button id="deleteDrawingButton" class="p-2 text-red-400 hover:bg-red-500/20 rounded-md"><i data-lucide="trash-2" class="w-5 h-5"></i></button>
+             <button id="closePropertyPanel" class="p-2 text-slate-400 hover:bg-slate-600/50 rounded-md">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+        </div>
+    </div>
+    
+    <!-- Modal Quản lý Kịch bản -->
+    <div id="sceneManagerModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+        <div class="card w-full max-w-lg transform transition-all" role="dialog">
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xl font-bold text-white">Quản lý Kịch bản</h3>
+                    <button id="closeSceneManager" class="p-2 rounded-full hover:bg-slate-700"><i data-lucide="x" class="w-5 h-5"></i></button>
+                </div>
+                <div class="mb-4">
+                    <input id="sceneNameInput" type="text" class="w-full p-3 bg-slate-900 border border-slate-600 rounded-lg focus:ring-2 focus:ring-primary text-white" placeholder="Nhập tên kịch bản mới...">
+                    <button id="saveSceneButton" class="btn w-full mt-2 bg-green-600 text-white font-bold py-2 px-4 rounded-lg">Lưu kịch bản hiện tại</button>
+                </div>
+                <div id="savedScenesList" class="max-h-64 overflow-y-auto space-y-2">
+                    <!-- Danh sách kịch bản sẽ được chèn vào đây -->
+                </div>
+            </div>
+        </div>
     </div>
 
-    <!-- **SỬA LỖI**: Thay đổi đường dẫn thành tương đối -->
-    <script type="module" src="./src/main.js"></script>
+
+    <script type="module">
+        // ============================================
+        // PHẦN 0: IMPORT FIREBASE SDK
+        // ============================================
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
+        import { getAI, getGenerativeModel, GoogleAIBackend } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-ai.js";
+
+        // ============================================
+        // PHẦN 1: KHAI BÁO BIẾN VÀ DOM ELEMENTS
+        // ============================================
+        const dom = {
+            // Sidebar & Main Controls
+            promptInput: document.getElementById('promptInput'),
+            sendPromptButton: document.getElementById('sendPromptButton'),
+            clearButton: document.getElementById('clearButton'),
+            buttonText: document.getElementById('buttonText'),
+            buttonSpinner: document.getElementById('buttonSpinner'),
+            statusMessage: document.getElementById('statusMessage'),
+            objectDetails: document.getElementById('objectDetails'),
+            openSidebarButton: document.getElementById('openSidebarButton'),
+            leftSidebar: document.getElementById('left-sidebar'),
+            sidebarBackdrop: document.getElementById('sidebar-backdrop'),
+            
+            // Simulation Canvas & Controls
+            canvasContainer: document.getElementById('canvas-container'),
+            playPauseButton: document.getElementById('playPauseButton'),
+            playPauseIcon: document.getElementById('playPauseIcon'),
+            resetButton: document.getElementById('resetButton'),
+            
+            // World Settings
+            worldSettingsButton: document.getElementById('worldSettingsButton'),
+            worldSettingsPanel: document.getElementById('worldSettingsPanel'),
+            timeScaleSlider: document.getElementById('timeScaleSlider'),
+            timeScaleLabel: document.getElementById('timeScaleLabel'),
+            gravityYSlider: document.getElementById('gravityYSlider'),
+            gravityYLabel: document.getElementById('gravityYLabel'),
+            gravityXSlider: document.getElementById('gravityXSlider'),
+            gravityXLabel: document.getElementById('gravityXLabel'),
+            airFrictionSlider: document.getElementById('airFrictionSlider'),
+            airFrictionLabel: document.getElementById('airFrictionLabel'),
+            trailToggle: document.getElementById('trailToggle'),
+
+            // Bottom Panel
+            bottomPanel: document.getElementById('bottom-panel'),
+            togglePanelButton: document.getElementById('togglePanelButton'),
+            toggleIcon: document.getElementById('toggleIcon'),
+            responseContainer: document.getElementById('responseContainer'),
+            
+            // Drawing Tools
+            drawTools: document.querySelectorAll('.draw-tool'),
+            clearDrawingsButton: document.getElementById('clearDrawingsButton'),
+            propertyPanel: document.getElementById('propertyPanel'),
+            propLabel: document.getElementById('propLabel'),
+            propMass: document.getElementById('propMass'),
+            propRestitution: document.getElementById('propRestitution'),
+            propFriction: document.getElementById('propFriction'),
+            propIsStatic: document.getElementById('propIsStatic'),
+            propThrusterX: document.getElementById('propThrusterX'),
+            propThrusterY: document.getElementById('propThrusterY'),
+            closePropertyPanel: document.getElementById('closePropertyPanel'),
+            deleteDrawingButton: document.getElementById('deleteDrawingButton'),
+            
+            // Scenarios
+            examplePromptsContainer: document.getElementById('example-prompts-container'),
+            
+            // Scene Manager Modal
+            sceneManagerModal: document.getElementById('sceneManagerModal'),
+            openSceneManager: document.getElementById('openSceneManager'),
+            closeSceneManager: document.getElementById('closeSceneManager'),
+            saveSceneButton: document.getElementById('saveSceneButton'),
+            sceneNameInput: document.getElementById('sceneNameInput'),
+            savedScenesList: document.getElementById('savedScenesList'),
+
+            // Confirmation Modal
+            confirmationModal: document.getElementById('confirmationModal'),
+            confirmationTitle: document.getElementById('confirmationTitle'),
+            confirmationMessage: document.getElementById('confirmationMessage'),
+            confirmCancelButton: document.getElementById('confirmCancelButton'),
+            confirmActionButton: document.getElementById('confirmActionButton'),
+
+            // Tutorial Modal
+            tutorialModal: document.getElementById('tutorialModal'),
+            openTutorialButton: document.getElementById('openTutorialButton'),
+            closeTutorialButton: document.getElementById('closeTutorialButton'),
+        };
+
+        // ============================================
+        // PHẦN 2: KHỞI TẠO MATTER.JS VÀ BIẾN TOÀN CỤC
+        // ============================================
+        const { Engine, Render, Runner, World, Bodies, Composite, Composites, Mouse, MouseConstraint, Body, Constraint, Events, Vertices, Vector } = Matter;
+        
+        const PIXELS_PER_METER = 100;
+        let labObjects = {}; 
+        let activeWaveGenerators = {};
+        let activeMotors = [];
+        let initialStates = new Map();
+        let motionChart;
+        let isSimulationRunning = true;
+        
+        // Drawing related variables
+        let activeDrawTool = null;
+        let drawStartPoint = null;
+        let currentDrawing = {};
+        let finalizedDrawings = [];
+        let finalizedConstraints = [];
+        let isDrawing = false;
+        let selectedDrawingIndex = -1;
+        let firstConnectionPoint = null;
+        let firstConnectionDrawingIndex = null;
+
+        // New feature variables
+        let isTrailEnabled = false;
+        let trailPoints = new Map();
+        let atwoodMachines = []; 
+        let selectedBodies = [];
+        let bodyColors = new Map();
+        const CHART_COLORS = ['#60a5fa', '#f87171', '#4ade80', '#facc15', '#a78bfa', '#22d3ee'];
+
+        // Audio
+        let collisionSynth;
+
+        // Matter.js setup
+        const engine = Engine.create();
+        const world = engine.world;
+        engine.gravity.y = 1;
+        engine.world.frictionAir = 0.01;
+
+        const render = Render.create({
+            element: dom.canvasContainer,
+            engine: engine,
+            options: {
+                width: dom.canvasContainer.clientWidth,
+                height: dom.canvasContainer.clientHeight,
+                wireframes: false,
+                background: 'transparent',
+                hasBounds: true // Cần cho pan/zoom
+            }
+        });
+        Render.run(render);
+
+        const runner = Runner.create();
+        Runner.run(runner, engine);
+        
+        let mouseConstraint;
+
+        // Coordinate conversion helpers
+        const worldToPixels = ({ x_m, y_m }) => ({ x: x_m * PIXELS_PER_METER, y: render.options.height - (y_m * PIXELS_PER_METER) });
+        const pixelsToWorld = ({ x_px, y_px }) => ({ x_m: x_px / PIXELS_PER_METER, y_m: (render.options.height - y_px) / PIXELS_PER_METER });
+        const scaleToPixels = (meters) => meters * PIXELS_PER_METER;
+
+        // Custom rendering logic
+        Events.on(render, 'afterRender', () => {
+            const ctx = render.context;
+            ctx.save();
+
+            // Vẽ lưới tọa độ
+            ctx.strokeStyle = 'rgba(100, 116, 139, 0.2)';
+            ctx.lineWidth = 1;
+            for (let x = 0.5; x * PIXELS_PER_METER < render.options.width; x += 0.5) { const px = x * PIXELS_PER_METER; ctx.beginPath(); ctx.moveTo(px, 0); ctx.lineTo(px, render.options.height); ctx.stroke(); }
+            for (let y = 0.5; y * PIXELS_PER_METER < render.options.height; y += 0.5) { const py = render.options.height - (y * PIXELS_PER_METER); ctx.beginPath(); ctx.moveTo(0, py); ctx.lineTo(render.options.width, py); ctx.stroke(); }
+            ctx.fillStyle = 'rgba(156, 163, 175, 0.7)';
+            ctx.font = '12px "Courier New", monospace';
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            for (let x = 1; x * PIXELS_PER_METER < render.options.width; x += 1) { ctx.fillText(`${x}m`, x * PIXELS_PER_METER, render.options.height - 20); }
+            ctx.textAlign = 'left';
+            for (let y = 1; y * PIXELS_PER_METER < render.options.height; y += 1) { ctx.fillText(`${y}m`, 20, render.options.height - (y * PIXELS_PER_METER)); }
+            
+            // Vẽ quỹ đạo
+            if (isTrailEnabled) {
+                selectedBodies.forEach(body => {
+                    if (trailPoints.has(body.id)) {
+                        const points = trailPoints.get(body.id);
+                        if (points.length > 1) {
+                            ctx.beginPath();
+                            ctx.moveTo(points[0].x, points[0].y);
+                            for (let i = 1; i < points.length; i++) {
+                                ctx.lineTo(points[i].x, points[i].y);
+                            }
+                            ctx.strokeStyle = body.render.strokeStyle || 'rgba(236, 72, 153, 0.7)';
+                            ctx.lineWidth = 2;
+                            ctx.stroke();
+                        }
+                    }
+                });
+            }
+
+            // Vẽ các hình đang vẽ và đã vẽ
+            const allDrawings = [...finalizedDrawings, ...(isDrawing ? [currentDrawing] : [])];
+            allDrawings.forEach((drawing, index) => {
+                if (drawing && drawing.type) {
+                    const isFinalized = index < finalizedDrawings.length;
+                    ctx.strokeStyle = (isFinalized && index === selectedDrawingIndex) ? '#f59e0b' : '#34d399';
+                    ctx.lineWidth = (isFinalized && index === selectedDrawingIndex) ? 3 : 2;
+                    ctx.setLineDash([5, 5]);
+                    ctx.beginPath();
+                    switch (drawing.type) {
+                        case 'freeform':
+                            if (drawing.path && drawing.path.length > 1) {
+                                ctx.moveTo(drawing.path[0].x, drawing.path[0].y);
+                                for (let i = 1; i < drawing.path.length; i++) ctx.lineTo(drawing.path[i].x, drawing.path[i].y);
+                            }
+                            break;
+                        case 'box': ctx.rect(drawing.x, drawing.y, drawing.w, drawing.h); break;
+                        case 'circle': ctx.arc(drawing.x, drawing.y, drawing.r, 0, Math.PI * 2); break;
+                        case 'wall': ctx.moveTo(drawing.x1, drawing.y1); ctx.lineTo(drawing.x2, drawing.y2); break;
+                        case 'motor': 
+                            ctx.arc(drawing.x, drawing.y, drawing.r, 0, Math.PI * 2);
+                            ctx.moveTo(drawing.x, drawing.y);
+                            ctx.lineTo(drawing.x + drawing.r, drawing.y);
+                            break;
+                    }
+                    ctx.stroke();
+                }
+            });
+
+            // Vẽ các kết nối đã tạo
+            finalizedConstraints.forEach(constraint => {
+                const posA = constraint.indexA !== -1 ? getDrawingCenter(finalizedDrawings[constraint.indexA]) : constraint.pointA;
+                const posB = constraint.indexB !== -1 ? getDrawingCenter(finalizedDrawings[constraint.indexB]) : constraint.pointB;
+                if(posA && posB) {
+                    ctx.beginPath();
+                    ctx.moveTo(posA.x, posA.y);
+                    ctx.lineTo(posB.x, posB.y);
+                    ctx.strokeStyle = constraint.type === 'spring' ? '#f472b6' : '#94a3b8';
+                    ctx.lineWidth = 2;
+                    ctx.setLineDash(constraint.type === 'spring' ? [4, 4] : []);
+                    ctx.stroke();
+                }
+            });
+
+            // Vẽ đường nối preview
+            if (firstConnectionPoint) {
+                ctx.beginPath();
+                ctx.moveTo(firstConnectionPoint.x, firstConnectionPoint.y);
+                ctx.lineTo(render.mouse.position.x, render.mouse.position.y);
+                ctx.strokeStyle = '#f59e0b';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([5, 5]);
+                ctx.stroke();
+            }
+
+            // Vẽ dây cho hệ ròng rọc
+            ctx.strokeStyle = 'rgba(203, 213, 225, 0.8)';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([]);
+            atwoodMachines = atwoodMachines.filter(m => 
+                Composite.get(world, m.pulley.id, 'body') &&
+                Composite.get(world, m.bodyA.id, 'body') &&
+                Composite.get(world, m.bodyB.id, 'body')
+            );
+            atwoodMachines.forEach(machine => {
+                const { pulley, bodyA, bodyB } = machine;
+                const pulleyPos = pulley.position;
+                const radius = pulley.circleRadius;
+                const posA = bodyA.position;
+                const posB = bodyB.position;
+                
+                const tangentLeft = { x: pulleyPos.x - radius, y: pulleyPos.y };
+                const tangentRight = { x: pulleyPos.x + radius, y: pulleyPos.y };
+
+                ctx.beginPath();
+                ctx.moveTo(posA.x, posA.y);
+                ctx.lineTo(tangentLeft.x, tangentLeft.y);
+                ctx.arc(pulleyPos.x, pulleyPos.y, radius, Math.PI, 0, false);
+                ctx.lineTo(posB.x, posB.y);
+                ctx.stroke();
+            });
+
+            ctx.restore();
+        });
+
+        // Handle canvas resizing
+        new ResizeObserver(() => {
+            render.bounds.max.x = dom.canvasContainer.clientWidth;
+            render.bounds.max.y = dom.canvasContainer.clientHeight;
+            render.options.width = dom.canvasContainer.clientWidth;
+            render.options.height = dom.canvasContainer.clientHeight;
+            render.canvas.width = dom.canvasContainer.clientWidth;
+            render.canvas.height = dom.canvasContainer.clientHeight;
+        }).observe(dom.canvasContainer);
+        
+        function setupWorld() {
+            World.clear(world);
+            labObjects = {};
+            activeWaveGenerators = {};
+            activeMotors = [];
+            initialStates.clear();
+            trailPoints.clear();
+            atwoodMachines = []; 
+            clearAllDrawings();
+            
+            // Add ground
+            const groundWidthM = 50;
+            const groundHeightM = 0.2;
+            const groundPosPx = worldToPixels({ x_m: groundWidthM / 2, y_m: groundHeightM / 2 });
+            const ground = Bodies.rectangle(groundPosPx.x, groundPosPx.y + (scaleToPixels(groundHeightM)/2), scaleToPixels(groundWidthM), scaleToPixels(groundHeightM), { isStatic: true, friction: 1.0, render: { fillStyle: '#334155' } });
+            World.add(world, ground);
+
+            // Add mouse control
+            const mouse = Mouse.create(render.canvas);
+            mouseConstraint = MouseConstraint.create(engine, { mouse: mouse, constraint: { stiffness: 0.2, render: { visible: false } } });
+            World.add(world, mouseConstraint);
+            render.mouse = mouse;
+
+            Events.on(mouseConstraint, 'mousedown', (event) => {
+                if(activeDrawTool) return;
+                const body = mouseConstraint.body;
+                if (!body) {
+                    clearSelectedBodies();
+                    displayObjectDetails(null);
+                    return;
+                }
+                
+                if (event.source.mouse.button === 0) { // Left click
+                    if (event.source.mouse.sourceEvents.mousedown.shiftKey) {
+                        toggleBodySelection(body);
+                    } else {
+                        setSelectedBody(body);
+                    }
+                    displayObjectDetails(selectedBodies[selectedBodies.length - 1] || null);
+                }
+            });
+        }
+
+        function saveInitialState(body) {
+            if (!body || body.isStatic) return;
+            initialStates.set(body.id, {
+                position: { ...body.position },
+                angle: body.angle,
+                velocity: { x: 0, y: 0 },
+                angularVelocity: 0
+            });
+        }
+        
+        // ============================================
+        // PHẦN 3: LOGIC GỌI API GEMINI (SỬ DỤNG LẠI SDK)
+        // ============================================
+        const firebaseConfig = {
+            apiKey: "AIzaSyCC0w9keePLXHeZMguYs6ILCGOFz1YKzOk",
+            authDomain: "ai-test-b4da5.firebaseapp.com",
+            projectId: "ai-test-b4da5",
+            storageBucket: "ai-test-b4da5.firebasestorage.app",
+            messagingSenderId: "333336470148",
+            appId: "1:333336470148:web:b381696bd4568699b158d1"
+        };
+        const app = initializeApp(firebaseConfig);
+
+        const toolImplementations = {
+            clearSimulation: () => {
+                setupWorld();
+                if (motionChart) motionChart.destroy();
+                dom.objectDetails.innerHTML = `<div class="flex items-center justify-center h-full text-slate-500">Nhấp vào một đối tượng động để xem chi tiết.</div>`;
+                return { success: true, message: "Đã dọn dẹp không gian." };
+            },
+            createBox: ({ width_m, height_m, x_m, y_m, isStatic, label, mass, restitution, velocityX, velocityY }) => {
+                const pos_px = worldToPixels({ x_m, y_m });
+                const options = { isStatic: isStatic === true, restitution: typeof restitution === 'number' ? restitution : 0.5, label, render: { fillStyle: '#3b82f6' } };
+                const box = Bodies.rectangle(pos_px.x, pos_px.y, scaleToPixels(width_m || 0.2), scaleToPixels(height_m || 0.2), options);
+                if (mass) Body.setMass(box, mass);
+                if (label) labObjects[label] = box;
+                if (velocityX || velocityY) Body.setVelocity(box, { x: velocityX || 0, y: -(velocityY || 0) });
+                World.add(world, box);
+                saveInitialState(box);
+                return { success: true, message: `Đã tạo hộp '${label || ''}'.` };
+            },
+            createBall: ({ radius_m, x_m, y_m, label, mass, restitution, velocityX, velocityY }) => {
+                const pos_px = worldToPixels({ x_m, y_m });
+                const options = { restitution: typeof restitution === 'number' ? restitution : 0.8, label, render: { fillStyle: '#ec4899' } };
+                const ball = Bodies.circle(pos_px.x, pos_px.y, scaleToPixels(radius_m || 0.1), options);
+                if (mass) Body.setMass(ball, mass);
+                if (label) labObjects[label] = ball;
+                 if (velocityX || velocityY) Body.setVelocity(ball, { x: velocityX || 0, y: -(velocityY || 0) });
+                World.add(world, ball);
+                saveInitialState(ball);
+                return { success: true, message: `Đã tạo bóng '${label || ''}'.` };
+            },
+            createPendulum: ({ length_m, anchorX_m, anchorY_m, label }) => {
+                const anchor_px = worldToPixels({ x_m: anchorX_m, y_m: anchorY_m });
+                const ball = Bodies.circle(anchor_px.x, anchor_px.y + scaleToPixels(length_m), scaleToPixels(0.15), { restitution: 0.9, friction: 0.001, density: 0.02, render: { fillStyle: '#f59e0b' }, label });
+                if (label) labObjects[label] = ball;
+                const constraint = Constraint.create({ pointA: anchor_px, bodyB: ball, length: scaleToPixels(length_m), stiffness: 0.9, render: { strokeStyle: '#94a3b8', lineWidth: 2 } });
+                World.add(world, [ball, constraint]);
+                saveInitialState(ball);
+                return { success: true, message: `Đã tạo con lắc.` };
+            },
+            createSpringPendulum: ({ anchorX_m, anchorY_m, mass, stiffness, label }) => {
+                const anchor_px = worldToPixels({ x_m: anchorX_m, y_m: anchorY_m });
+                const ball = Bodies.circle(anchor_px.x, anchor_px.y + scaleToPixels(2.0), scaleToPixels(0.2), { render: { fillStyle: '#0891b2' }, label });
+                Body.setMass(ball, mass || 1);
+                if (label) labObjects[label] = ball;
+                const spring = Constraint.create({ pointA: anchor_px, bodyB: ball, stiffness: stiffness || 0.05, damping: 0.02, render: { strokeStyle: '#6b7280', lineWidth: 3, type: 'spring' } });
+                World.add(world, [ball, spring]);
+                saveInitialState(ball);
+                return { success: true, message: `Đã tạo con lắc lò xo.` };
+            },
+            createLever: ({ length_m, fulcrumX_m, fulcrumY_m, barLabel }) => {
+                const barPos_px = worldToPixels({x_m: fulcrumX_m, y_m: fulcrumY_m + 0.1});
+                const leverBar = Bodies.rectangle(barPos_px.x, barPos_px.y, scaleToPixels(length_m), scaleToPixels(0.1), { render: { fillStyle: '#64748b' }, label: barLabel, friction: 0.01 });
+                if (barLabel) labObjects[barLabel] = leverBar;
+                const fulcrumPos_px = worldToPixels({x_m: fulcrumX_m, y_m: fulcrumY_m - 0.15 });
+                const fulcrum = Bodies.trapezoid(fulcrumPos_px.x, fulcrumPos_px.y, scaleToPixels(0.3), scaleToPixels(0.3), 1, { isStatic: true, render: { fillStyle: '#475569' } });
+                const pivot_px = worldToPixels({x_m: fulcrumX_m, y_m: fulcrumY_m});
+                const constraint = Constraint.create({ pointA: { x: pivot_px.x, y: pivot_px.y }, bodyB: leverBar, length: 0, stiffness: 1 });
+                World.add(world, [leverBar, fulcrum, constraint]);
+                saveInitialState(leverBar);
+                return { success: true, message: `Đã tạo đòn bẩy.`};
+            },
+            createInclinedPlane: ({ angle_deg, x_m, length_m }) => {
+                const angle_rad = -angle_deg * (Math.PI / 180);
+                const width_px = scaleToPixels(length_m);
+                const height_px = 10;
+                const ground_y_m = 0.1;
+                const start_pos_px = worldToPixels({x_m: x_m, y_m: ground_y_m});
+                const center_x_px = start_pos_px.x + (width_px / 2) * Math.cos(angle_rad);
+                const center_y_px = start_pos_px.y + (width_px / 2) * Math.sin(angle_rad);
+                const plane = Bodies.rectangle(center_x_px, center_y_px, width_px, height_px, { isStatic: true, angle: angle_rad, friction: 1.0, render: { fillStyle: '#475569' } });
+                World.add(world, plane);
+                return { success: true, message: `Đã tạo mặt phẳng nghiêng ${angle_deg} độ.` };
+            },
+            setVelocity: ({ label, velocityX, velocityY }) => {
+                const body = labObjects[label];
+                if (!body) return { success: false, message: `Không tìm thấy vật thể có nhãn '${label}'.`};
+                const vel = { x: velocityX || 0, y: -(velocityY || 0) };
+                Body.setVelocity(body, vel);
+                return { success: true, message: `Đã đặt vận tốc cho '${label}'.`};
+            },
+            createConstraint: ({ labelA, labelB, anchorX, anchorY, type = 'joint' }) => {
+                const bodyA = labObjects[labelA];
+                const bodyB = labObjects[labelB];
+                let options = {
+                    bodyA, bodyB,
+                    stiffness: type === 'spring' ? 0.05 : 0.9,
+                    damping: type === 'spring' ? 0.02 : 0,
+                    render: { type: type === 'spring' ? 'spring' : 'line', strokeStyle: '#94a3b8' }
+                };
+                if (anchorX !== undefined && anchorY !== undefined) {
+                    options.pointA = worldToPixels({ x_m: anchorX, y_m: anchorY });
+                }
+                if (!bodyA && !bodyB) return { success: false, message: 'Cần ít nhất một vật thể để tạo liên kết.' };
+                
+                const constraint = Constraint.create(options);
+                World.add(world, constraint);
+                return { success: true, message: `Đã tạo ${type}.` };
+            },
+            createSceneFromDrawings: ({ objects }) => {
+                objects = objects || [];
+                const createdBodies = [];
+                finalizedDrawings.forEach((drawing, index) => {
+                    const obj = objects.find(o => o.drawingIndex === index) || {};
+                    let body;
+                    const props = { ...drawing.properties, ...obj };
+                    const options = { 
+                        label: props.label, 
+                        restitution: typeof props.restitution === 'number' ? props.restitution : 0.5, 
+                        friction: typeof props.friction === 'number' ? props.friction : 0.1, 
+                        isStatic: props.isStatic === true,
+                        frictionAir: engine.world.frictionAir,
+                        render: { fillStyle: '#a78bfa' } 
+                    };
+                    switch (drawing.type) {
+                        case 'freeform':
+                            if (!drawing.path || drawing.path.length < 3) { createdBodies[index] = null; return; }
+                            try {
+                                const vertices = Vertices.clockwiseSort(drawing.path);
+                                const center = Vertices.centre(vertices);
+                                body = Bodies.fromVertices(center.x, center.y, [vertices], options);
+                            } catch (e) {
+                                console.warn("Could not create freeform body, likely self-intersecting:", e);
+                                body = null;
+                            }
+                            break;
+                        case 'box': body = Bodies.rectangle(drawing.x + drawing.w / 2, drawing.y + drawing.h / 2, drawing.w, drawing.h, options); break;
+                        case 'circle': body = Bodies.circle(drawing.x, drawing.y, drawing.r, options); break;
+                        case 'wall':
+                            const wallCenter = { x: (drawing.x1 + drawing.x2) / 2, y: (drawing.y1 + drawing.y2) / 2 };
+                            const dx = drawing.x2 - drawing.x1; const dy = drawing.y2 - drawing.y1;
+                            const length = Math.sqrt(dx*dx + dy*dy); const angle = Math.atan2(dy, dx);
+                            body = Bodies.rectangle(wallCenter.x, wallCenter.y, length, 10, { ...options, angle, isStatic: true });
+                            break;
+                        case 'motor':
+                            body = Bodies.circle(drawing.x, drawing.y, drawing.r, { ...options, isStatic: true });
+                            if (props.speed) {
+                                activeMotors.push({ body, speed: props.speed });
+                            }
+                            break;
+                    }
+                    if (body) {
+                        if (typeof props.mass === 'number') Body.setMass(body, props.mass);
+                        if (props.label) labObjects[props.label] = body;
+                        if (props.thrusterX || props.thrusterY) {
+                            body.plugin.thruster = { x: props.thrusterX || 0, y: props.thrusterY || 0 };
+                        }
+                        World.add(world, body);
+                        saveInitialState(body);
+                        createdBodies[index] = body;
+                    }
+                });
+
+                finalizedConstraints.forEach(constraint => {
+                    const bodyA = constraint.indexA !== -1 ? createdBodies[constraint.indexA] : null;
+                    const bodyB = constraint.indexB !== -1 ? createdBodies[constraint.indexB] : null;
+                    if (!bodyA && !bodyB) return;
+                    const constraintOptions = {
+                        stiffness: constraint.type === 'spring' ? 0.05 : 1,
+                        damping: constraint.type === 'spring' ? 0.02 : 0,
+                        render: { type: constraint.type === 'spring' ? 'spring' : 'line', strokeStyle: '#94a3b8', lineWidth: 2 }
+                    };
+                    if (bodyA) {
+                        constraintOptions.bodyA = bodyA;
+                        constraintOptions.pointA = { x: constraint.pointA.x - bodyA.position.x, y: constraint.pointA.y - bodyA.position.y };
+                    } else {
+                        constraintOptions.pointA = constraint.pointA;
+                    }
+                    if (bodyB) {
+                        constraintOptions.bodyB = bodyB;
+                        constraintOptions.pointB = { x: constraint.pointB.x - bodyB.position.x, y: constraint.pointB.y - bodyB.position.y };
+                    } else {
+                        constraintOptions.pointB = constraint.pointB;
+                    }
+                    if (!constraintOptions.bodyA) { // Swap if only B exists
+                        constraintOptions.bodyA = constraintOptions.bodyB;
+                        constraintOptions.pointA = constraintOptions.pointB;
+                        constraintOptions.bodyB = null;
+                        constraintOptions.pointB = constraint.pointA;
+                    }
+                    World.add(world, Constraint.create(constraintOptions));
+                });
+
+                clearAllDrawings();
+                return { success: true, message: `Đã tạo cảnh từ hình vẽ.` };
+            },
+            applyForce: ({ label, forceX, forceY }) => {
+                const body = labObjects[label];
+                if (!body) return { success: false, message: `Không tìm thấy vật thể có nhãn '${label}'.`};
+                const scaledForce = { x: (forceX || 0) * 0.005, y: -(forceY || 0) * 0.005 };
+                Body.applyForce(body, body.position, scaledForce);
+                return { success: true, message: `Đã tác dụng lực (${forceX}, ${forceY})N lên '${label}'.`};
+            },
+            applyThruster: ({ label, forceX, forceY }) => {
+                const body = labObjects[label];
+                if (!body) return { success: false, message: `Không tìm thấy vật thể '${label}'.` };
+                body.plugin.thruster = { x: forceX || 0, y: forceY || 0 };
+                return { success: true, message: `Đã gắn động cơ đẩy lên '${label}'.` };
+            },
+            createMotor: ({ label, speed }) => {
+                const body = labObjects[label];
+                if (!body) return { success: false, message: `Không tìm thấy vật thể '${label}'.` };
+                activeMotors.push({ body, speed: speed || 0.1 });
+                return { success: true, message: `Đã tạo động cơ cho '${label}' với tốc độ ${speed}.` };
+            },
+            modifyObject: ({ label, properties }) => {
+                const body = labObjects[label];
+                if (!body) return { success: false, message: `Không tìm thấy vật thể '${label}'.` };
+                let messages = [];
+                for (const key in properties) {
+                    const value = properties[key];
+                    if (value === undefined) continue; // Allow null/0
+                    switch (key) {
+                        case 'mass': Body.setMass(body, value); messages.push(`khối lượng thành ${value}kg`); break;
+                        case 'restitution': body.restitution = value; messages.push(`độ đàn hồi thành ${value}`); break;
+                        case 'friction': body.friction = value; messages.push(`ma sát thành ${value}`); break;
+                        case 'isStatic': Body.setStatic(body, value); messages.push(`trạng thái tĩnh thành ${value}`); break;
+                        case 'angle_deg': Body.setAngle(body, value * (Math.PI / 180)); messages.push(`góc thành ${value} độ`); break;
+                        case 'thrusterX': 
+                            if (!body.plugin.thruster) body.plugin.thruster = {x:0, y:0};
+                            body.plugin.thruster.x = value;
+                            messages.push(`lực đẩy X thành ${value}`);
+                            break;
+                        case 'thrusterY': 
+                            if (!body.plugin.thruster) body.plugin.thruster = {x:0, y:0};
+                            body.plugin.thruster.y = value;
+                            messages.push(`lực đẩy Y thành ${value}`);
+                            break;
+                        case 'label':
+                            delete labObjects[label];
+                            body.label = value;
+                            labObjects[value] = body;
+                            label = value;
+                            messages.push(`nhãn thành '${value}'`);
+                            break;
+                    }
+                }
+                saveInitialState(body);
+                // Update UI if this is the currently selected body
+                if (selectedBodies.some(b => b.id === body.id)) {
+                    displayObjectDetails(body);
+                }
+                return { success: true, message: `Đã cập nhật ${messages.join(', ')} cho vật thể '${label}'.` };
+            },
+            deleteObject: ({ label }) => {
+                const body = labObjects[label];
+                if (!body) return { success: false, message: `Không tìm thấy vật thể '${label}'.` };
+                World.remove(world, body);
+                delete labObjects[label];
+                initialStates.delete(body.id);
+                const bodyIndex = selectedBodies.findIndex(b => b.id === body.id);
+                if (bodyIndex > -1) {
+                    selectedBodies.splice(bodyIndex, 1);
+                    displayObjectDetails(selectedBodies[selectedBodies.length - 1] || null);
+                }
+                return { success: true, message: `Đã xóa vật thể '${label}'.` };
+            },
+            createAtwoodMachine: ({ pulleyX_m, pulleyY_m, massA, labelA, massB, labelB }) => {
+                const pulleyPos = worldToPixels({ x_m: pulleyX_m, y_m: pulleyY_m });
+                const radius = scaleToPixels(0.3);
+                const pulley = Bodies.circle(pulleyPos.x, pulleyPos.y, radius, { isStatic: true, render: { fillStyle: '#84cc16' } });
+                const support = Bodies.rectangle(pulleyPos.x, pulleyPos.y - radius, 10, 20, { isStatic: true, render: { fillStyle: '#a8a29e' } });
+                const bodyA = Bodies.rectangle(pulleyPos.x - radius, pulleyPos.y + radius * 3, 40, 40, { mass: massA, label: labelA, render: { fillStyle: '#f97316' } });
+                const bodyB = Bodies.rectangle(pulleyPos.x + radius, pulleyPos.y + radius * 3, 40, 40, { mass: massB, label: labelB, render: { fillStyle: '#6366f1' } });
+                if (labelA) labObjects[labelA] = bodyA;
+                if (labelB) labObjects[labelB] = bodyB;
+                const atwoodComposite = Composite.create({ label: 'AtwoodMachine' });
+                Composite.add(atwoodComposite, [pulley, support, bodyA, bodyB]);
+                const rope = Constraint.create({ 
+                    bodyA, bodyB, length: scaleToPixels(4), stiffness: 1, render: { visible: false } 
+                });
+                Composite.add(atwoodComposite, [rope]);
+                World.add(world, atwoodComposite);
+                atwoodMachines.push({ pulley, bodyA, bodyB }); 
+                saveInitialState(bodyA);
+                saveInitialState(bodyB);
+                return { success: true, message: `Đã tạo máy Atwood.` };
+            },
+            createRope: ({ startX_m, startY_m, endX_m, endY_m, segments, label }) => {
+                const start = worldToPixels({ x_m: startX_m, y_m: startY_m });
+                const end = worldToPixels({ x_m: endX_m, y_m: endY_m });
+                const rope = Composites.stack(start.x, start.y, segments, 1, 10, 10, (x, y) => {
+                    return Bodies.rectangle(x, y, 20, 5, { 
+                        frictionAir: 0.01, density: 0.001, render: { fillStyle: '#f59e0b' }
+                    });
+                });
+                Composites.chain(rope, 0.5, 0, -0.5, 0, { stiffness: 1, length: 0, render: { visible: false } });
+                const firstBody = rope.bodies[0];
+                const lastBody = rope.bodies[rope.bodies.length - 1];
+                const startConstraint = Constraint.create({
+                    bodyB: firstBody, pointB: { x: -10, y: 0 }, pointA: { x: start.x, y: start.y }, stiffness: 0.9
+                });
+                const endConstraint = Constraint.create({
+                    bodyB: lastBody, pointB: { x: 10, y: 0 }, pointA: { x: end.x, y: end.y }, stiffness: 0.9
+                });
+                rope.startConstraint = startConstraint;
+                Composite.add(rope, [startConstraint, endConstraint]);
+                World.add(world, rope);
+                labObjects[label] = rope;
+                return { success: true, message: `Đã tạo sợi dây '${label}'.` };
+            },
+            startWave: ({ ropeLabel, amplitude_m, frequency_hz }) => {
+                const rope = labObjects[ropeLabel];
+                if (!rope || rope.type !== 'composite' || !rope.startConstraint) return { success: false, message: `Không tìm thấy sợi dây '${ropeLabel}'.` };
+                const amplitude_px = scaleToPixels(amplitude_m);
+                const startConstraint = rope.startConstraint;
+                const originalAnchorY = startConstraint.pointA.y;
+                activeWaveGenerators[ropeLabel] = (time) => {
+                    const dy = amplitude_px * Math.sin((time / 1000) * frequency_hz * 2 * Math.PI);
+                    startConstraint.pointA.y = originalAnchorY - dy;
+                };
+                return { success: true, message: `Bắt đầu tạo sóng trên '${ropeLabel}'.` };
+            },
+            createNewtonCradle: ({ x_m, y_m, number, radius_m, separation_m }) => {
+                const pos = worldToPixels({ x_m, y_m });
+                const cradle = Composites.newtonsCradle(pos.x, pos.y, number, scaleToPixels(radius_m), scaleToPixels(separation_m * 5));
+                World.add(world, cradle);
+                cradle.bodies.forEach(saveInitialState);
+                Body.translate(cradle.bodies[0], { x: -scaleToPixels(separation_m * 2), y: -scaleToPixels(separation_m * 2) });
+                return { success: true, message: `Đã tạo con lắc Newton với ${number} quả cầu.` };
+            },
+        };
+
+        const functionDeclarations = [
+            { name: "clearSimulation", description: "Dọn dẹp, xóa tất cả các vật thể." },
+            { name: "createBox", description: "Tạo một vật thể hình hộp.", parameters: { type: "OBJECT", properties: { width_m: { type: "NUMBER" }, height_m: { type: "NUMBER" }, x_m: { type: "NUMBER" }, y_m: { type: "NUMBER" }, label: { type: "STRING" }, mass: { type: "NUMBER" }, restitution: { type: "NUMBER" }, isStatic: { type: "BOOLEAN"}, velocityX: { type: "NUMBER" }, velocityY: { type: "NUMBER" } }, required: ["x_m", "y_m"] }},
+            { name: "createBall", description: "Tạo một vật thể hình tròn.", parameters: { type: "OBJECT", properties: { radius_m: { type: "NUMBER" }, x_m: { type: "NUMBER" }, y_m: { type: "NUMBER" }, label: { type: "STRING" }, mass: { type: "NUMBER" }, restitution: { type: "NUMBER"}, velocityX: { type: "NUMBER" }, velocityY: { type: "NUMBER" } }, required: ["x_m", "y_m"] }},
+            { name: "createPendulum", description: "Tạo một con lắc đơn.", parameters: { type: "OBJECT", properties: { length_m: { type: "NUMBER" }, anchorX_m: { type: "NUMBER" }, anchorY_m: { type: "NUMBER" }, label: { type: "STRING" }}, required: ["length_m", "anchorX_m", "anchorY_m"] }},
+            { name: "createSpringPendulum", description: "Tạo một con lắc lò xo.", parameters: { type: "OBJECT", properties: { anchorX_m: { type: "NUMBER" }, anchorY_m: { type: "NUMBER" }, mass: { type: "NUMBER" }, stiffness: { type: "NUMBER" }, label: { type: "STRING" } }, required: ["anchorX_m", "anchorY_m"] }},
+            { name: "createLever", description: "Tạo một đòn bẩy.", parameters: { type: "OBJECT", properties: { length_m: { type: "NUMBER" }, fulcrumX_m: { type: "NUMBER" }, fulcrumY_m: { type: "NUMBER" }, barLabel: { type: "STRING" } }, required: ["length_m", "fulcrumX_m", "fulcrumY_m"] }},
+            { name: "createInclinedPlane", description: "Tạo một mặt phẳng nghiêng.", parameters: { type: "OBJECT", properties: { angle_deg: { type: "NUMBER" }, x_m: { type: "NUMBER" }, length_m: { type: "NUMBER" } }, required: ["angle_deg", "x_m", "length_m"] }},
+            { name: "setVelocity", description: "Thiết lập vận tốc cho vật thể.", parameters: { type: "OBJECT", properties: { label: { type: "STRING" }, velocityX: { type: "NUMBER" }, velocityY: { type: "NUMBER" } }, required: ["label"] }},
+            { name: "applyForce", description: "Tác dụng một lực tức thời lên một vật thể.", parameters: { type: "OBJECT", properties: { label: { type: "STRING" }, forceX: { type: "NUMBER" }, forceY: { type: "NUMBER" } }, required: ["label"] }},
+            { name: "applyThruster", description: "Gắn một động cơ đẩy (lực liên tục) lên một vật thể.", parameters: { type: "OBJECT", properties: { label: { type: "STRING" }, forceX: { type: "NUMBER" }, forceY: { type: "NUMBER" } }, required: ["label", "forceX", "forceY"] }},
+            { name: "createMotor", description: "Biến một vật thể tĩnh thành một động cơ quay.", parameters: { type: "OBJECT", properties: { label: { type: "STRING" }, speed: { type: "NUMBER", description: "Tốc độ quay (rad/s)" } }, required: ["label", "speed"] }},
+            { name: "createSceneFromDrawings", description: "Biến hình vẽ thành vật thể vật lý.", parameters: { type: "OBJECT", properties: { objects: { type: "ARRAY", items: { type: "OBJECT", properties: { drawingIndex: { type: "NUMBER" }, label: { type: "STRING" }, mass: { type: "NUMBER" }, restitution: { type: "NUMBER" }, friction: { type: "NUMBER" }, isStatic: { type: "BOOLEAN" }, speed: { type: "NUMBER" }, thrusterX: { type: "NUMBER" }, thrusterY: { type: "NUMBER" } }, required: ["drawingIndex"] } } } } },
+            { name: "createConstraint", description: "Tạo một liên kết (khớp nối hoặc lò xo).", parameters: { type: "OBJECT", properties: { labelA: { type: "STRING" }, labelB: { type: "STRING" }, anchorX: { type: "NUMBER" }, anchorY: { type: "NUMBER" }, type: { type: "STRING" } }, required: ["type"] } },
+            { name: "modifyObject", description: "Thay đổi thuộc tính của một vật thể.", parameters: { type: "OBJECT", properties: { label: { type: "STRING" }, properties: { type: "OBJECT", properties: { mass: { type: "NUMBER" }, restitution: { type: "NUMBER" }, friction: { type: "NUMBER" }, isStatic: { type: "BOOLEAN" }, angle_deg: { type: "NUMBER" }, label: { type: "STRING" }, thrusterX: {type: "NUMBER"}, thrusterY: {type: "NUMBER"} } } }, required: ["label", "properties"] } },
+            { name: "deleteObject", description: "Xóa một vật thể.", parameters: { type: "OBJECT", properties: { label: { type: "STRING" } }, required: ["label"] } },
+            { name: "createAtwoodMachine", description: "Tạo một hệ ròng rọc đơn (máy Atwood).", parameters: { type: "OBJECT", properties: { pulleyX_m: { type: "NUMBER" }, pulleyY_m: { type: "NUMBER" }, massA: { type: "NUMBER" }, labelA: { type: "STRING" }, massB: { type: "NUMBER" }, labelB: { type: "STRING" } }, required: ["pulleyX_m", "pulleyY_m", "massA", "labelA", "massB", "labelB"] }},
+            { name: "createRope", description: "Tạo một sợi dây đàn hồi giữa hai điểm.", parameters: { type: "OBJECT", properties: { startX_m: { type: "NUMBER" }, startY_m: { type: "NUMBER" }, endX_m: { type: "NUMBER" }, endY_m: { type: "NUMBER" }, segments: { type: "NUMBER", description: "Số lượng đoạn dây." }, label: { type: "STRING" } }, required: ["startX_m", "startY_m", "endX_m", "endY_m", "segments", "label"] }},
+            { name: "startWave", description: "Bắt đầu tạo sóng cơ học trên một sợi dây.", parameters: { type: "OBJECT", properties: { ropeLabel: { type: "STRING" }, amplitude_m: { type: "NUMBER" }, frequency_hz: { type: "NUMBER" } }, required: ["ropeLabel", "amplitude_m", "frequency_hz"] }},
+            { name: "createNewtonCradle", description: "Tạo một con lắc Newton.", parameters: { type: "OBJECT", properties: { x_m: { type: "NUMBER" }, y_m: { type: "NUMBER" }, number: { type: "NUMBER", description: "Số lượng quả cầu" }, radius_m: { type: "NUMBER" }, separation_m: { type: "NUMBER", description: "Khoảng cách giữa các quả cầu" } }, required: ["x_m", "y_m", "number", "radius_m", "separation_m"] }},
+        ];
+        
+        // Khởi tạo mô hình AI
+        let chat;
+        try {
+            const ai = getAI(app, { backend: new GoogleAIBackend() });
+            const modelWithTools = getGenerativeModel(ai, { model: "gemini-2.5-flash", tools: [{ functionDeclarations }] });
+            chat = modelWithTools.startChat();
+        } catch (e) {
+            console.error("Lỗi khởi tạo AI Model:", e);
+            updateStatus(`Lỗi khởi tạo AI Model: ${e.message}.`, "error");
+        }
+
+        async function callGeminiAPI() {
+            if (!chat) { updateStatus("Mô hình AI chưa được khởi tạo.", "error"); return; }
+            const promptText = dom.promptInput.value.trim();
+            
+            if (finalizedDrawings.length > 0 || finalizedConstraints.length > 0) {
+                updateStatus("AI đang phân tích hình vẽ...", "info");
+                dom.responseContainer.innerHTML = `<span class="text-slate-500">AI đang phân tích hình vẽ...</span>`;
+                dom.buttonText.textContent = 'Đang xử lý';
+                dom.buttonSpinner.classList.remove('hidden');
+                dom.sendPromptButton.disabled = true;
+
+                let context = `Bối cảnh: Người dùng đã vẽ ${finalizedDrawings.length} hình và ${finalizedConstraints.length} liên kết. Nhiệm vụ của bạn là phân tích các hình vẽ và yêu cầu của người dùng để tạo ra một kịch bản vật lý thực tế.`;
+                context += `\n1. **Phân tích Hình dạng:** Xác định vai trò của mỗi hình vẽ. Ví dụ, một hình tam giác hoặc một hình nhỏ nằm dưới một thanh dài có thể là một điểm tựa (fulcrum). Một thanh dài có thể là đòn bẩy (lever). Một hình tròn có thể là quả bóng (ball). Một hình tròn được vẽ bằng công cụ motor là động cơ.`;
+                context += `\n2. **Gọi Hàm createSceneFromDrawings:** Gọi hàm này để tạo tất cả các vật thể. Khi gọi, hãy chỉ định các thuộc tính quan trọng:`;
+                context += `\n   - \`isStatic: true\` cho các vật thể đóng vai trò là nền tảng, điểm tựa, hoặc động cơ. Đây là điều RẤT QUAN TRỌNG để các hệ thống hoạt động chính xác.`;
+                context += `\n   - \`label\` cho các vật thể chính để có thể tham chiếu chúng sau này.`;
+                context += `\n   - \`speed\` cho các vật thể là động cơ.`;
+
+                if (promptText) {
+                    context += `\n\nYêu cầu cụ thể của người dùng là: "${promptText}". Hãy sử dụng thông tin này để thực hiện các bước trên.`;
+                } else {
+                     context += `\n\nNgười dùng không cung cấp yêu cầu cụ thể, hãy tự suy luận vai trò của các vật thể dựa trên hình dạng và vị trí của chúng.`;
+                }
+
+                try {
+                    const result = await chat.sendMessage(context);
+                    const response = result.response;
+                    const functionCalls = response.functionCalls();
+
+                    if (functionCalls && functionCalls.length > 0) {
+                        for (const funcCall of functionCalls) {
+                            if (toolImplementations[funcCall.name]) {
+                                toolImplementations[funcCall.name](funcCall.args);
+                            }
+                        }
+                    } else {
+                        dom.responseContainer.innerText = response.text() || "AI không thể chuyển đổi hình vẽ, hãy thử lại.";
+                    }
+                    updateStatus("Hoàn thành!", "success");
+                } catch (error) {
+                    console.error("Lỗi khi gọi API cho hình vẽ:", error);
+                    updateStatus(`Lỗi API: ${error.message}.`, "error");
+                } finally {
+                    dom.buttonText.textContent = 'Tạo mô phỏng';
+                    dom.buttonSpinner.classList.add('hidden');
+                    dom.sendPromptButton.disabled = false;
+                }
+                return;
+            }
+
+            if (!promptText) {
+                updateStatus("Vui lòng nhập yêu cầu hoặc vẽ hình!", "error");
+                return;
+            }
+
+            updateStatus("AI đang suy nghĩ...", "info");
+            dom.responseContainer.innerHTML = `<span class="text-slate-500">AI đang phân tích...</span>`;
+            dom.buttonText.textContent = 'Đang xử lý';
+            dom.buttonSpinner.classList.remove('hidden');
+            dom.sendPromptButton.disabled = true;
+
+            let context = "";
+            if (Object.keys(labObjects).length > 0) {
+                const existingLabels = Object.keys(labObjects).join(', ');
+                context += `Bối cảnh: Các vật thể sau đã tồn tại trong mô phỏng: ${existingLabels}. `;
+            }
+            const finalPrompt = context + promptText;
+
+            try {
+                const result = await chat.sendMessage(finalPrompt);
+                const response = result.response;
+                const text = response.text();
+                const functionCalls = response.functionCalls();
+
+                if (functionCalls && functionCalls.length > 0) {
+                    updateStatus("AI đang thực hiện hành động...", "info");
+                    dom.responseContainer.innerText = text || "AI quyết định thực hiện hành động...";
+                    for (const funcCall of functionCalls) {
+                        const { name, args } = funcCall;
+                        if (toolImplementations[name]) {
+                            console.log(`Calling tool: ${name} with args:`, args);
+                            toolImplementations[name](args);
+                        }
+                    }
+                } else {
+                    dom.responseContainer.innerText = text;
+                }
+                updateStatus("Hoàn thành!", "success");
+            } catch (error) {
+                console.error("Lỗi khi gọi Gemini API:", error);
+                dom.responseContainer.innerText = `Lỗi: ${error.message}.`;
+                updateStatus(`Lỗi API: ${error.message}.`, "error");
+            } finally {
+                dom.buttonText.textContent = 'Tạo mô phỏng';
+                dom.buttonSpinner.classList.add('hidden');
+                dom.sendPromptButton.disabled = false;
+            }
+        }
+        
+        // ============================================
+        // PHẦN 4: BIỂU ĐỒ VÀ HIỂN THỊ DỮ LIỆU
+        // ============================================
+        let startTime;
+        let chartData = { labels: [], datasets: [] };
+        
+        function updateSimulationData() {
+            const time = engine.timing.timestamp;
+            // Cập nhật sóng
+            for (const label in activeWaveGenerators) {
+                if (activeWaveGenerators.hasOwnProperty(label)) {
+                    activeWaveGenerators[label](time);
+                }
+            }
+
+            // Cập nhật động cơ và lực đẩy
+            Composite.allBodies(world).forEach(body => {
+                // Lực đẩy
+                if (body.plugin && body.plugin.thruster) {
+                    const force = body.plugin.thruster;
+                    const worldForce = Vector.rotate({ x: force.x, y: -force.y }, body.angle);
+                    Body.applyForce(body, body.position, Vector.mult(worldForce, 0.001));
+                }
+            });
+            activeMotors.forEach(motor => {
+                Body.setAngularVelocity(motor.body, motor.speed);
+            });
+
+
+            // Cập nhật quỹ đạo
+            if (isTrailEnabled) {
+                selectedBodies.forEach(body => {
+                    if (!trailPoints.has(body.id)) {
+                        trailPoints.set(body.id, []);
+                    }
+                    const points = trailPoints.get(body.id);
+                    points.push({ ...body.position });
+                    if (points.length > 200) { // Giới hạn độ dài quỹ đạo
+                        points.shift();
+                    }
+                });
+            }
+            
+            // Cập nhật biểu đồ
+            if (selectedBodies.length > 0 && motionChart && isSimulationRunning) {
+                const timeInSeconds = (performance.now() - startTime) / 1000;
+                if (chartData.labels.length > 100) { chartData.labels.shift(); chartData.datasets.forEach(ds => ds.data.shift()); }
+                chartData.labels.push(timeInSeconds.toFixed(1));
+                
+                const G = Math.abs(engine.gravity.y * 9.81);
+                
+                selectedBodies.forEach((body, index) => {
+                    if (body.isStatic) return;
+                    const speedDatasetIndex = index * 4;
+                    const kineticEnergyDatasetIndex = index * 4 + 1;
+                    const potentialEnergyDatasetIndex = index * 4 + 2;
+                    const totalEnergyDatasetIndex = index * 4 + 3;
+
+                    const vx_ms = body.velocity.x;
+                    const vy_ms = -body.velocity.y;
+                    const speed_ms = Math.sqrt(vx_ms*vx_ms + vy_ms*vy_ms);
+                    
+                    const height_m = pixelsToWorld({x_px: 0, y_px: body.position.y}).y_m;
+                    const potentialEnergy = body.mass * G * height_m;
+                    const kineticEnergy = 0.5 * body.mass * (speed_ms * speed_ms);
+                    const totalEnergy = potentialEnergy + kineticEnergy;
+                    
+                    if (chartData.datasets[speedDatasetIndex]) chartData.datasets[speedDatasetIndex].data.push(speed_ms);
+                    if (chartData.datasets[kineticEnergyDatasetIndex]) chartData.datasets[kineticEnergyDatasetIndex].data.push(kineticEnergy);
+                    if (chartData.datasets[potentialEnergyDatasetIndex]) chartData.datasets[potentialEnergyDatasetIndex].data.push(potentialEnergy);
+                    if (chartData.datasets[totalEnergyDatasetIndex]) chartData.datasets[totalEnergyDatasetIndex].data.push(totalEnergy);
+                });
+
+                motionChart.update('none');
+            }
+        }
+        Events.on(engine, 'beforeUpdate', updateSimulationData);
+        
+        function displayObjectDetails(body) {
+            if (!body) {
+                dom.objectDetails.innerHTML = `<div class="flex items-center justify-center h-full text-slate-500">Nhấp hoặc Shift+Nhấp vào đối tượng để xem chi tiết.</div>`;
+                if (motionChart) { motionChart.destroy(); motionChart = null; }
+                return;
+            }
+
+            const thruster = body.plugin.thruster || { x: 0, y: 0 };
+
+            dom.objectDetails.innerHTML = `
+                <h3 class="font-bold text-lg text-primary mb-2 truncate">${body.label || 'Vật thể không tên'}</h3>
+                <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                    <label for="detailsMass" class="text-slate-400 self-center">Khối lượng (kg):</label>
+                    <input type="number" id="detailsMass" value="${body.mass.toFixed(2)}" class="w-full p-1 bg-slate-800 border border-slate-600 rounded text-white font-mono text-right">
+                    
+                    <label class="text-slate-400 self-center col-span-2 font-semibold mt-1 border-t border-slate-700 pt-2">Lực đẩy (Thruster)</label>
+                    <label for="detailsThrusterX" class="text-slate-400 self-center">Lực X:</label>
+                    <input type="number" step="0.001" id="detailsThrusterX" value="${thruster.x}" class="w-full p-1 bg-slate-800 border border-slate-600 rounded text-white font-mono text-right">
+                    
+                    <label for="detailsThrusterY" class="text-slate-400 self-center">Lực Y:</label>
+                    <input type="number" step="0.001" id="detailsThrusterY" value="${thruster.y}" class="w-full p-1 bg-slate-800 border border-slate-600 rounded text-white font-mono text-right">
+                </div>
+            `;
+            
+            // Add event listeners for the new input fields
+            document.getElementById('detailsMass').addEventListener('change', (e) => {
+                Body.setMass(body, parseFloat(e.target.value));
+                saveInitialState(body);
+            });
+            document.getElementById('detailsThrusterX').addEventListener('change', (e) => {
+                if (!body.plugin.thruster) body.plugin.thruster = { x: 0, y: 0 };
+                body.plugin.thruster.x = parseFloat(e.target.value) || 0;
+            });
+             document.getElementById('detailsThrusterY').addEventListener('change', (e) => {
+                if (!body.plugin.thruster) body.plugin.thruster = { x: 0, y: 0 };
+                body.plugin.thruster.y = parseFloat(e.target.value) || 0;
+            });
+
+            // Re-create chart for all selected bodies
+            if (motionChart) motionChart.destroy();
+            const newDatasets = [];
+            selectedBodies.forEach((b, index) => {
+                if (b.isStatic) return;
+                const color = CHART_COLORS[index % CHART_COLORS.length];
+                const label = b.label || `Vật ${b.id}`;
+                newDatasets.push(
+                    { label: `Tốc độ (${label})`, data: [], borderColor: color, tension: 0.1, yAxisID: 'y-velocity', borderWidth: 2, pointRadius: 0 },
+                    { label: `Động năng (${label})`, data: [], borderColor: color, tension: 0.1, yAxisID: 'y-energy', borderWidth: 2, pointRadius: 0, hidden: true },
+                    { label: `Thế năng (${label})`, data: [], borderColor: color, tension: 0.1, yAxisID: 'y-energy', borderWidth: 2, pointRadius: 0, hidden: true },
+                    { label: `Cơ năng (${label})`, data: [], borderColor: color, tension: 0.1, yAxisID: 'y-energy', borderWidth: 2, pointRadius: 0, borderDash: [5, 5], hidden: true }
+                );
+            });
+
+            chartData = { labels: [], datasets: newDatasets };
+            const chartCtx = document.getElementById('motionChart').getContext('2d');
+            motionChart = new Chart(chartCtx, {
+                type: 'line', data: chartData,
+                options: {
+                    responsive: true, maintainAspectRatio: false, animation: false,
+                    plugins: { legend: { labels: { color: '#d1d5db' } } },
+                    scales: {
+                        x: { title: { display: true, text: 'Thời gian (s)', color: '#9ca3af' }, ticks: { color: '#9ca3af' } },
+                        'y-velocity': { type: 'linear', position: 'left', title: { display: true, text: 'Tốc độ (m/s)', color: '#9ca3af' }, ticks: { color: '#9ca3af' } },
+                        'y-energy': { type: 'linear', position: 'right', title: { display: true, text: 'Năng lượng (J)', color: '#9ca3af' }, ticks: { color: '#9ca3af' }, grid: { drawOnChartArea: false } }
+                    }
+                }
+            });
+            startTime = performance.now();
+        }
+
+        // ============================================
+        // PHẦN 5: GẮN CÁC SỰ KIỆN VÀ KHỞI TẠO
+        // ============================================
+        function updateStatus(message, type = 'info') {
+            dom.statusMessage.textContent = message;
+            dom.statusMessage.className = 'mt-4 text-center text-sm h-5 transition-colors duration-300';
+            if (type === 'error') dom.statusMessage.classList.add('text-red-400');
+            else if (type === 'success') dom.statusMessage.classList.add('text-green-400');
+            else dom.statusMessage.classList.add('text-slate-400');
+        }
+
+        dom.sendPromptButton.addEventListener("click", () => {
+             const modelWithTools = getGenerativeModel(getAI(app, { backend: new GoogleAIBackend() }), { model: "gemini-2.5-flash", tools: [{ functionDeclarations }] });
+             chat = modelWithTools.startChat();
+             callGeminiAPI();
+        });
+        dom.promptInput.addEventListener("keydown", (event) => {
+            if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); dom.sendPromptButton.click(); }
+        });
+
+        dom.clearButton.addEventListener("click", () => {
+            toolImplementations.clearSimulation();
+            updateStatus("Đã dọn dẹp.", "info");
+            dom.responseContainer.innerHTML = `<span class="text-slate-500">Đã dọn dẹp.</span>`;
+        });
+        
+        dom.togglePanelButton.addEventListener('click', () => {
+            dom.bottomPanel.classList.toggle('translate-y-[calc(100%-4rem)]');
+            dom.toggleIcon.classList.toggle('rotate-180');
+        });
+
+        dom.playPauseButton.addEventListener('click', () => {
+            isSimulationRunning = !isSimulationRunning;
+            Runner.setRunning(runner, isSimulationRunning);
+            dom.playPauseIcon.outerHTML = `<i id="playPauseIcon" data-lucide="${isSimulationRunning ? 'pause' : 'play'}" class="w-8 h-8 text-white"></i>`;
+            lucide.createIcons();
+        });
+
+        dom.resetButton.addEventListener('click', () => {
+            for (const [id, state] of initialStates) {
+                const body = Composite.get(world, id, 'body');
+                if (body) {
+                    Body.setPosition(body, state.position);
+                    Body.setAngle(body, state.angle);
+                    Body.setVelocity(body, state.velocity);
+                    Body.setAngularVelocity(body, state.angularVelocity);
+                }
+            }
+            if (!isSimulationRunning) { Runner.tick(runner, engine); }
+        });
+
+        // World settings event listeners
+        dom.timeScaleSlider.addEventListener('input', (e) => {
+            engine.timing.timeScale = parseFloat(e.target.value);
+            dom.timeScaleLabel.textContent = `${engine.timing.timeScale.toFixed(1)}x`;
+        });
+        dom.gravityYSlider.addEventListener('input', (e) => {
+            engine.gravity.y = parseFloat(e.target.value);
+            dom.gravityYLabel.textContent = engine.gravity.y.toFixed(1);
+        });
+        dom.gravityXSlider.addEventListener('input', (e) => {
+            engine.gravity.x = parseFloat(e.target.value);
+            dom.gravityXLabel.textContent = engine.gravity.x.toFixed(1);
+        });
+        dom.airFrictionSlider.addEventListener('input', (e) => {
+            const friction = parseFloat(e.target.value);
+            engine.world.frictionAir = friction;
+            Composite.allBodies(world).forEach(body => { body.frictionAir = friction; });
+            dom.airFrictionLabel.textContent = friction.toFixed(3);
+        });
+        dom.worldSettingsButton.addEventListener('click', () => {
+            dom.worldSettingsPanel.classList.toggle('hidden');
+        });
+        dom.trailToggle.addEventListener('change', (e) => {
+            isTrailEnabled = e.target.checked;
+            if (!isTrailEnabled) {
+                trailPoints.clear();
+            }
+        });
+
+        // Responsive sidebar logic
+        dom.openSidebarButton.addEventListener('click', () => {
+            dom.leftSidebar.classList.add('open');
+            dom.sidebarBackdrop.classList.remove('hidden');
+        });
+        function closeSidebar() {
+            dom.leftSidebar.classList.remove('open');
+            dom.sidebarBackdrop.classList.add('hidden');
+        }
+        dom.sidebarBackdrop.addEventListener('click', closeSidebar);
+        
+        // ============================================
+        // PHẦN 6: LOGIC CÔNG CỤ VẼ
+        // ============================================
+        function startDraw(event) {
+            if (!activeDrawTool) return;
+            isDrawing = true;
+            drawStartPoint = { x: event.offsetX, y: event.offsetY };
+            currentDrawing = { type: activeDrawTool, properties: {} };
+            if (activeDrawTool === 'freeform') currentDrawing.path = [drawStartPoint];
+        }
+        function draw(event) {
+            if (!isDrawing || !drawStartPoint) return;
+            const currentPoint = { x: event.offsetX, y: event.offsetY };
+            switch (activeDrawTool) {
+                case 'freeform': currentDrawing.path.push(currentPoint); break;
+                case 'box':
+                    currentDrawing.x = Math.min(drawStartPoint.x, currentPoint.x);
+                    currentDrawing.y = Math.min(drawStartPoint.y, currentPoint.y);
+                    currentDrawing.w = Math.abs(drawStartPoint.x - currentPoint.x);
+                    currentDrawing.h = Math.abs(drawStartPoint.y - currentPoint.y);
+                    break;
+                case 'circle':
+                case 'motor':
+                    currentDrawing.x = drawStartPoint.x; currentDrawing.y = drawStartPoint.y;
+                    const dx = currentPoint.x - drawStartPoint.x; const dy = currentPoint.y - drawStartPoint.y;
+                    currentDrawing.r = Math.sqrt(dx*dx + dy*dy);
+                    break;
+                case 'wall':
+                    currentDrawing.x1 = drawStartPoint.x; currentDrawing.y1 = drawStartPoint.y;
+                    currentDrawing.x2 = currentPoint.x; currentDrawing.y2 = currentPoint.y;
+                    break;
+            }
+        }
+        function endDraw() {
+            if (!isDrawing) return;
+            isDrawing = false;
+            if ((currentDrawing.type === 'circle' || currentDrawing.type === 'motor') && (!currentDrawing.r || currentDrawing.r < 2)) { currentDrawing = {}; return; }
+            if (currentDrawing.type === 'box' && (!currentDrawing.w || currentDrawing.w < 2 || !currentDrawing.h || currentDrawing.h < 2)) { currentDrawing = {}; return; }
+            if (currentDrawing.type === 'wall' && currentDrawing.x1 === currentDrawing.x2 && currentDrawing.y1 === currentDrawing.y2) { currentDrawing = {}; return; }
+            if (currentDrawing.type === 'motor') {
+                currentDrawing.properties.isStatic = true;
+                currentDrawing.properties.speed = 0.1; // Default speed
+            }
+            finalizedDrawings.push({ ...currentDrawing });
+            currentDrawing = {};
+        }
+        function getDrawingCenter(drawing) {
+            if (!drawing) return null;
+            switch (drawing.type) {
+                case 'circle': 
+                case 'motor':
+                    return { x: drawing.x, y: drawing.y };
+                case 'box': return { x: drawing.x + drawing.w / 2, y: drawing.y + drawing.h / 2 };
+                case 'freeform': return Vertices.centre(drawing.path);
+                case 'wall': return { x: (drawing.x1 + drawing.x2) / 2, y: (drawing.y1 + drawing.y2) / 2 };
+                default: return null;
+            }
+        }
+        function handleConnectionClick(event) {
+            const point = { x: event.offsetX, y: event.offsetY };
+            let clickedIndex = -1;
+            for (let i = finalizedDrawings.length - 1; i >= 0; i--) {
+                if (isPointInDrawing(point, finalizedDrawings[i])) { clickedIndex = i; break; }
+            }
+            if (firstConnectionDrawingIndex === null) {
+                firstConnectionDrawingIndex = clickedIndex;
+                firstConnectionPoint = clickedIndex !== -1 ? getDrawingCenter(finalizedDrawings[clickedIndex]) : point;
+            } else {
+                if (firstConnectionDrawingIndex === clickedIndex && clickedIndex !== -1) return;
+                finalizedConstraints.push({
+                    type: activeDrawTool,
+                    indexA: firstConnectionDrawingIndex, pointA: firstConnectionPoint,
+                    indexB: clickedIndex, pointB: clickedIndex !== -1 ? getDrawingCenter(finalizedDrawings[clickedIndex]) : point
+                });
+                firstConnectionPoint = null;
+                firstConnectionDrawingIndex = null;
+                toggleDrawTool(activeDrawTool);
+            }
+        }
+        function toggleDrawTool(tool) {
+            const isShapeTool = ['freeform', 'box', 'circle', 'wall', 'motor'].includes(tool);
+            const isConnectionTool = ['joint', 'spring'].includes(tool);
+            if (activeDrawTool) {
+                document.querySelector(`.draw-tool[data-tool="${activeDrawTool}"]`)?.classList.remove('active');
+                render.canvas.classList.remove('drawing-mode');
+                mouseConstraint.constraint.stiffness = 0.2;
+                render.canvas.removeEventListener('mousedown', startDraw);
+                render.canvas.removeEventListener('mousemove', draw);
+                render.canvas.removeEventListener('mouseup', endDraw);
+                render.canvas.removeEventListener('mousedown', handleConnectionClick);
+                firstConnectionPoint = null;
+                firstConnectionDrawingIndex = null;
+            }
+            if (activeDrawTool === tool) { activeDrawTool = null; return; }
+            activeDrawTool = tool;
+            document.querySelector(`.draw-tool[data-tool="${tool}"]`)?.classList.add('active');
+            render.canvas.classList.add('drawing-mode');
+            mouseConstraint.constraint.stiffness = 0;
+            if (isShapeTool) {
+                render.canvas.addEventListener('mousedown', startDraw);
+                render.canvas.addEventListener('mousemove', draw);
+                render.canvas.addEventListener('mouseup', endDraw);
+            } else if (isConnectionTool) {
+                render.canvas.addEventListener('mousedown', handleConnectionClick);
+            }
+        }
+        dom.drawTools.forEach(button => button.addEventListener('click', () => toggleDrawTool(button.dataset.tool)));
+        function isPointInPolygon(point, polygon) {
+            if (!polygon) return false;
+            let x = point.x, y = point.y; let inside = false;
+            for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+                let xi = polygon[i].x, yi = polygon[i].y; let xj = polygon[j].x, yj = polygon[j].y;
+                if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) inside = !inside;
+            }
+            return inside;
+        }
+        function isPointInDrawing(point, drawing) {
+            if (!drawing) return false;
+            switch (drawing.type) {
+                case 'circle':
+                case 'motor':
+                    const dx = point.x - drawing.x; const dy = point.y - drawing.y; return Math.sqrt(dx*dx + dy*dy) < drawing.r;
+                case 'box': return (point.x > drawing.x && point.x < drawing.x + drawing.w && point.y > drawing.y && point.y < drawing.y + drawing.h);
+                case 'freeform': return isPointInPolygon(point, drawing.path);
+                case 'wall':
+                default: return false;
+            }
+        }
+        function handleCanvasClick(event) {
+            if (activeDrawTool) return;
+            const clickPoint = { x: event.offsetX, y: event.offsetY };
+            let clickedIndex = -1;
+            for (let i = finalizedDrawings.length - 1; i >= 0; i--) {
+                if (isPointInDrawing(clickPoint, finalizedDrawings[i])) {
+                    clickedIndex = i;
+                    break;
+                }
+            }
+            if (clickedIndex !== -1) {
+                showPropertyPanel(clickedIndex, clickPoint);
+            } else {
+                hidePropertyPanel();
+            }
+        }
+        render.canvas.addEventListener('click', handleCanvasClick);
+        function showPropertyPanel(index, position) {
+            selectedDrawingIndex = index;
+            const drawing = finalizedDrawings[index];
+            const props = drawing.properties;
+            dom.propLabel.value = props.label || '';
+            dom.propMass.value = props.mass || '';
+            dom.propRestitution.value = props.restitution ?? '';
+            dom.propFriction.value = props.friction ?? '';
+            dom.propIsStatic.checked = props.isStatic || false;
+            dom.propThrusterX.value = props.thrusterX || '';
+            dom.propThrusterY.value = props.thrusterY || '';
+            dom.propertyPanel.style.left = `${Math.min(position.x + 15, dom.canvasContainer.clientWidth - dom.propertyPanel.offsetWidth - 10)}px`;
+            dom.propertyPanel.style.top = `${Math.min(position.y + 15, dom.canvasContainer.clientHeight - dom.propertyPanel.offsetHeight - 10)}px`;
+            dom.propertyPanel.classList.remove('hidden');
+        }
+        function hidePropertyPanel() {
+            selectedDrawingIndex = -1;
+            dom.propertyPanel.classList.add('hidden');
+        }
+        dom.closePropertyPanel.addEventListener('click', hidePropertyPanel);
+        function updateDrawingProperties() {
+            if (selectedDrawingIndex === -1) return;
+            const props = finalizedDrawings[selectedDrawingIndex].properties;
+            props.label = dom.propLabel.value.trim() || null;
+            props.mass = dom.propMass.value ? parseFloat(dom.propMass.value) : null;
+            props.restitution = dom.propRestitution.value ? parseFloat(dom.propRestitution.value) : null;
+            props.friction = dom.propFriction.value ? parseFloat(dom.propFriction.value) : null;
+            props.isStatic = dom.propIsStatic.checked;
+            props.thrusterX = dom.propThrusterX.value ? parseFloat(dom.propThrusterX.value) : null;
+            props.thrusterY = dom.propThrusterY.value ? parseFloat(dom.propThrusterY.value) : null;
+        }
+        ['input', 'change'].forEach(evt => {
+            dom.propLabel.addEventListener(evt, updateDrawingProperties);
+            dom.propMass.addEventListener(evt, updateDrawingProperties);
+            dom.propRestitution.addEventListener(evt, updateDrawingProperties);
+            dom.propFriction.addEventListener(evt, updateDrawingProperties);
+            dom.propIsStatic.addEventListener(evt, updateDrawingProperties);
+            dom.propThrusterX.addEventListener(evt, updateDrawingProperties);
+            dom.propThrusterY.addEventListener(evt, updateDrawingProperties);
+        });
+        dom.deleteDrawingButton.addEventListener('click', () => {
+            if (selectedDrawingIndex > -1) {
+                finalizedDrawings.splice(selectedDrawingIndex, 1);
+                hidePropertyPanel();
+            }
+        });
+        function clearAllDrawings() {
+            finalizedDrawings = [];
+            finalizedConstraints = [];
+            currentDrawing = {};
+            hidePropertyPanel();
+        }
+        dom.clearDrawingsButton.addEventListener('click', clearAllDrawings);
+
+        // ============================================
+        // PHẦN 7: LOGIC TÍNH NĂNG MỚI
+        // ============================================
+        
+        // --- Multi-select logic ---
+        function setSelectedBody(body) {
+            clearSelectedBodies();
+            addBodyToSelection(body);
+        }
+        function toggleBodySelection(body) {
+            const index = selectedBodies.findIndex(b => b.id === body.id);
+            if (index > -1) {
+                removeBodyFromSelection(body);
+            } else {
+                addBodyToSelection(body);
+            }
+        }
+        function addBodyToSelection(body) {
+            if (!body || selectedBodies.find(b => b.id === body.id)) return;
+            selectedBodies.push(body);
+            if (body.render) {
+                if (!bodyColors.has(body.id)) {
+                    bodyColors.set(body.id, { fill: body.render.fillStyle, stroke: body.render.strokeStyle });
+                }
+                const color = CHART_COLORS[(selectedBodies.length - 1) % CHART_COLORS.length];
+                body.render.fillStyle = color;
+                body.render.strokeStyle = '#ffffff';
+                body.render.lineWidth = 2;
+            }
+            trailPoints.clear();
+        }
+        function removeBodyFromSelection(body) {
+            const index = selectedBodies.findIndex(b => b.id === body.id);
+            if (index > -1) {
+                selectedBodies.splice(index, 1);
+                if (body.render && bodyColors.has(body.id)) {
+                    const originalColors = bodyColors.get(body.id);
+                    body.render.fillStyle = originalColors.fill;
+                    body.render.strokeStyle = originalColors.stroke;
+                    body.render.lineWidth = 0;
+                }
+            }
+        }
+        function clearSelectedBodies() {
+            [...selectedBodies].forEach(removeBodyFromSelection);
+            selectedBodies = [];
+            trailPoints.clear();
+        }
+
+        // --- Camera Controls (Pan & Zoom) ---
+        let isPanning = false;
+        let panStart = { x: 0, y: 0 };
+        render.canvas.addEventListener('mousedown', (e) => {
+            if (e.button === 2) { // Right mouse button
+                isPanning = true;
+                panStart = { x: e.clientX, y: e.clientY };
+                render.canvas.style.cursor = 'move';
+                e.preventDefault();
+            }
+        });
+        window.addEventListener('mousemove', (e) => {
+            if (isPanning) {
+                const dx = e.clientX - panStart.x;
+                const dy = e.clientY - panStart.y;
+                panStart = { x: e.clientX, y: e.clientY };
+                Render.lookAt(render, Composite.allBodies(engine.world), {
+                    x: -dx,
+                    y: -dy
+                }, false);
+            }
+        });
+        window.addEventListener('mouseup', (e) => {
+            if (e.button === 2) {
+                isPanning = false;
+                render.canvas.style.cursor = 'grab';
+            }
+        });
+        render.canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const zoomFactor = e.deltaY < 0 ? 0.9 : 1.1;
+            const mousePosition = { x: e.offsetX, y: e.offsetY };
+            
+            // Translate view to center on mouse, zoom, then translate back
+            Render.lookAt(render, Composite.allBodies(engine.world), {
+                x: mousePosition.x,
+                y: mousePosition.y
+            }, false);
+
+            render.bounds.min.x *= zoomFactor;
+            render.bounds.max.x *= zoomFactor;
+            render.bounds.min.y *= zoomFactor;
+            render.bounds.max.y *= zoomFactor;
+
+            Render.lookAt(render, Composite.allBodies(engine.world), {
+                x: -mousePosition.x,
+                y: -mousePosition.y
+            }, false);
+        });
+        render.canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+
+        // --- Khôi phục các ví dụ ---
+        const examplePrompts = {
+            "Con lắc đơn": "Tạo một con lắc đơn dài 3m treo ở điểm (5m, 8m).",
+            "Hệ đòn bẩy": "Tạo một đòn bẩy dài 6m có điểm tựa ở (5m, 2m) và đặt tên thanh đòn là 'thanh'. Sau đó, tạo một hộp nặng 5kg tên 'vatnang' ở (3m, 2.5m) và một quả bóng 2kg tên 'bong' ở (7m, 2.5m).",
+            "Va chạm đàn hồi": "Tạo một quả bóng nặng 2kg tên 'b1' ở (2m, 2m) và một quả bóng khác nặng 2kg tên 'b2' ở (8m, 2m) với độ đàn hồi là 1, sau đó cho bóng 'b1' vận tốc 5m/s theo phương ngang sang phải.",
+            "Hệ Ròng Rọc": "Tạo một máy Atwood ở (6, 8) với vật A 4kg và vật B 4.5kg.",
+            "Sóng Cơ": "Tạo một sợi dây tên 'day1' gồm 20 đoạn từ (1, 7) đến (11, 7). Sau đó, tạo sóng trên 'day1' với biên độ 0.5m và tần số 1.5Hz.",
+            "Con lắc Newton": "Tạo một con lắc Newton với 7 quả cầu tại (6, 8), mỗi quả có bán kính 0.2m và cách nhau 0.4m."
+        };
+        dom.examplePromptsContainer.addEventListener('click', (e) => {
+            if (e.target.classList.contains('example-prompt')) {
+                const key = e.target.textContent;
+                if (examplePrompts[key]) { dom.promptInput.value = examplePrompts[key]; dom.promptInput.focus(); }
+            }
+        });
+
+        // --- Quản lý kịch bản (Lưu/Tải) ---
+        const SCENE_STORAGE_KEY = 'physics_simulator_scenes_v6_1';
+
+        function getSavedScenes() { return JSON.parse(localStorage.getItem(SCENE_STORAGE_KEY) || '{}'); }
+        function saveCurrentScene() {
+            const sceneName = dom.sceneNameInput.value.trim();
+            if (!sceneName) { alert("Vui lòng nhập tên kịch bản!"); return; }
+            const scenes = getSavedScenes();
+            scenes[sceneName] = {
+                drawings: finalizedDrawings,
+                constraints: finalizedConstraints,
+                world: { gravity: engine.gravity, frictionAir: engine.world.frictionAir, timeScale: engine.timing.timeScale },
+                timestamp: new Date().toISOString()
+            };
+            localStorage.setItem(SCENE_STORAGE_KEY, JSON.stringify(scenes));
+            dom.sceneNameInput.value = '';
+            populateScenesList();
+            updateStatus(`Đã lưu kịch bản '${sceneName}'.`, 'success');
+        }
+        function loadScene(sceneName) {
+            const sceneData = getSavedScenes()[sceneName];
+            if (!sceneData) return;
+            toolImplementations.clearSimulation();
+            finalizedDrawings = sceneData.drawings || [];
+            finalizedConstraints = sceneData.constraints || [];
+            if (sceneData.world) {
+                engine.gravity = sceneData.world.gravity;
+                engine.world.frictionAir = sceneData.world.frictionAir;
+                engine.timing.timeScale = sceneData.world.timeScale;
+                dom.gravityYSlider.value = engine.gravity.y; dom.gravityYLabel.textContent = engine.gravity.y.toFixed(1);
+                dom.gravityXSlider.value = engine.gravity.x; dom.gravityXLabel.textContent = engine.gravity.x.toFixed(1);
+                dom.airFrictionSlider.value = engine.world.frictionAir; dom.airFrictionLabel.textContent = engine.world.frictionAir.toFixed(3);
+                dom.timeScaleSlider.value = engine.timing.timeScale; dom.timeScaleLabel.textContent = `${engine.timing.timeScale.toFixed(1)}x`;
+            }
+            toolImplementations.createSceneFromDrawings({});
+            dom.sceneManagerModal.classList.add('hidden');
+            updateStatus(`Đã tải kịch bản '${sceneName}'.`, 'success');
+        }
+        function deleteScene(sceneName) {
+            const scenes = getSavedScenes();
+            delete scenes[sceneName];
+            localStorage.setItem(SCENE_STORAGE_KEY, JSON.stringify(scenes));
+            populateScenesList();
+        }
+        function populateScenesList() {
+            const scenes = getSavedScenes();
+            dom.savedScenesList.innerHTML = '';
+            if (Object.keys(scenes).length === 0) {
+                dom.savedScenesList.innerHTML = `<p class="text-slate-500 text-center p-4">Chưa có kịch bản nào được lưu.</p>`;
+                return;
+            }
+            for (const name in scenes) {
+                const sceneEl = document.createElement('div');
+                sceneEl.className = 'flex justify-between items-center p-3 bg-slate-800/70 rounded-lg';
+                sceneEl.innerHTML = `
+                    <div>
+                        <p class="font-semibold text-white">${name}</p>
+                        <p class="text-xs text-slate-400">Đã lưu: ${new Date(scenes[name].timestamp).toLocaleString()}</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button class="load-btn btn p-2 bg-primary rounded-md" data-name="${name}" title="Tải"><i data-lucide="download" class="w-4 h-4 text-white pointer-events-none"></i></button>
+                        <button class="delete-btn btn p-2 bg-red-600 rounded-md" data-name="${name}" title="Xóa"><i data-lucide="trash-2" class="w-4 h-4 text-white pointer-events-none"></i></button>
+                    </div>
+                `;
+                dom.savedScenesList.appendChild(sceneEl);
+            }
+            lucide.createIcons();
+        }
+        dom.openSceneManager.addEventListener('click', () => { populateScenesList(); dom.sceneManagerModal.classList.remove('hidden'); });
+        dom.closeSceneManager.addEventListener('click', () => dom.sceneManagerModal.classList.add('hidden'));
+        dom.saveSceneButton.addEventListener('click', saveCurrentScene);
+        dom.savedScenesList.addEventListener('click', (e) => {
+            const target = e.target.closest('button');
+            if (!target) return;
+            const sceneName = target.dataset.name;
+            if (target.classList.contains('load-btn')) {
+                loadScene(sceneName);
+            } else if (target.classList.contains('delete-btn')) {
+                showConfirmationModal(
+                    'Xóa kịch bản?',
+                    `Bạn có chắc muốn xóa vĩnh viễn kịch bản "${sceneName}" không?`,
+                    () => deleteScene(sceneName)
+                );
+            }
+        });
+
+        // --- Logic Modal xác nhận ---
+        let confirmCallback = null;
+        function showConfirmationModal(title, message, onConfirm) {
+            dom.confirmationTitle.textContent = title;
+            dom.confirmationMessage.textContent = message;
+            confirmCallback = onConfirm;
+            dom.confirmationModal.classList.remove('hidden');
+        }
+        function hideConfirmationModal() {
+            dom.confirmationModal.classList.add('hidden');
+            confirmCallback = null;
+        }
+        dom.confirmCancelButton.addEventListener('click', hideConfirmationModal);
+        dom.confirmActionButton.addEventListener('click', () => {
+            if (confirmCallback) {
+                confirmCallback();
+            }
+            hideConfirmationModal();
+        });
+
+        // --- Logic Modal Hướng dẫn ---
+        dom.openTutorialButton.addEventListener('click', () => dom.tutorialModal.classList.remove('hidden'));
+        dom.closeTutorialButton.addEventListener('click', () => dom.tutorialModal.classList.add('hidden'));
+
+        // --- Âm thanh va chạm ---
+        function setupAudio() {
+            collisionSynth = new Tone.MembraneSynth({
+                pitchDecay: 0.01, octaves: 6, oscillator: { type: "sine" },
+                envelope: { attack: 0.001, decay: 0.5, sustain: 0.01, release: 0.8, attackCurve: "exponential" }
+            }).toDestination();
+        }
+        Events.on(engine, 'collisionStart', (event) => {
+            if (!collisionSynth || !isSimulationRunning) return;
+            let maxIntensity = 0;
+            event.pairs.forEach(pair => {
+                if (pair.collision.depth > maxIntensity) maxIntensity = pair.collision.depth;
+            });
+            if (maxIntensity > 0.5) {
+                Tone.start();
+                const volume = Math.min(-10 + maxIntensity * 2, 10);
+                const note = 60 + Math.min(maxIntensity * 5, 40);
+                collisionSynth.triggerAttackRelease(note, "8n", Tone.now(), volume);
+            }
+        });
+
+        // ============================================
+        // KHỞI ĐỘNG ỨNG DỤNG
+        // ============================================
+        window.onload = () => {
+            setupWorld();
+            setupAudio();
+            lucide.createIcons();
+            updateStatus("Sẵn sàng nhận yêu cầu.", "success");
+        };
+    </script>
 </body>
 </html>
