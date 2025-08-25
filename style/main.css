@@ -1,0 +1,51 @@
+/* CSS tùy chỉnh cho toàn bộ ứng dụng */
+
+/* Áp dụng cho canvas mô phỏng */
+#simulationCanvas { 
+    display: block; 
+    width: 100%; 
+    height: 100%; 
+    cursor: grab; 
+}
+
+/* Thay đổi con trỏ chuột khi ở chế độ vẽ */
+#simulationCanvas.drawing-mode { 
+    cursor: crosshair; 
+}
+
+/* Thay đổi con trỏ chuột khi đang kéo thả vật thể */
+#simulationCanvas:active { 
+    cursor: grabbing; 
+}
+
+/* Lớp tiện ích để ẩn phần tử */
+.hidden { 
+    display: none; 
+}
+
+/* CSS cho hiệu ứng trượt lên của bảng điều khiển dưới cùng */
+.slide-up { 
+    transform: translateY(calc(100% - 4rem)); 
+    transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1); 
+}
+
+.slide-up.open { 
+    transform: translateY(0); 
+}
+
+/* Tùy chỉnh giao diện cho thanh trượt (input range) */
+input[type=range]::-webkit-slider-thumb { 
+    -webkit-appearance: none; 
+    appearance: none; 
+    width: 20px; 
+    height: 20px; 
+    background: #3b82f6; 
+    cursor: pointer; 
+    border-radius: 50%; 
+}
+
+/* Định dạng cho công cụ vẽ khi được kích hoạt */
+.draw-tool.active { 
+    background-color: #2563eb; 
+    color: white; 
+}
