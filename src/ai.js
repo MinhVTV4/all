@@ -4,45 +4,51 @@
  */
 
 // Import các hàm cần thiết từ Firebase AI SDK
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
+// **SỬA LỖI**: Thêm getApps và getApp để kiểm tra khởi tạo an toàn
+import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
 import { getAI, getGenerativeModel, GoogleAIBackend } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-ai.js";
 
 // Biến để lưu trữ model và phiên chat đang hoạt động
 let modelWithTools;
 let chat;
 
+// Cấu hình Firebase (lấy từ mã nguồn gốc)
+const firebaseConfig = {
+    apiKey: "AIzaSyCC0w9keePLXHeZMguYs6ILCGOFz1YKzOk", // Cảnh báo: Khóa API này nên được bảo mật hơn trong môi trường production.
+    authDomain: "ai-test-b4da5.firebaseapp.com",
+    projectId: "ai-test-b4da5",
+    storageBucket: "ai-test-b4da5.firebasestorage.app",
+    messagingSenderId: "333336470148",
+    appId: "1:333336470148:web:b381696bd4568699b158d1"
+};
+
+/**
+ * **SỬA LỖI**: Hàm khởi tạo Firebase an toàn.
+ * Kiểm tra xem app đã tồn tại chưa, nếu chưa thì mới khởi tạo.
+ * @returns {FirebaseApp} - Instance của Firebase App.
+ */
+function getFirebaseApp() {
+    if (getApps().length === 0) {
+        return initializeApp(firebaseConfig);
+    } else {
+        return getApp(); // Lấy app đã được khởi tạo
+    }
+}
+
+
 /**
  * Khởi tạo hoặc khởi tạo lại mô hình AI với một bộ công cụ cụ thể.
  * @param {Array} functionDeclarations - Mảng các định nghĩa hàm cho AI.
  */
 export function initializeAIModel(functionDeclarations) {
-    // Cấu hình Firebase (lấy từ mã nguồn gốc)
-  const firebaseConfig = {
-    apiKey: "AIzaSyDQj9JpV0w3fbfLXWqEaeJ2QkAnnMyeCwU",
-    authDomain: "allinone-2b180.firebaseapp.com",
-    projectId: "allinone-2b180",
-    storageBucket: "allinone-2b180.firebasestorage.app",
-    messagingSenderId: "147236185680",
-    appId: "1:147236185680:web:dde77438ff630e3210d355"
-  };
-    
-    // Khởi tạo app Firebase (chỉ một lần)
-    let app;
     try {
-        app = initializeApp(firebaseConfig);
-    } catch (e) {
-        // Bỏ qua lỗi nếu app đã được khởi tạo
-        if (e.code !== 'duplicate-app') {
-            console.error("Lỗi khởi tạo Firebase:", e);
-            throw e;
-        }
-    }
-
-    try {
+        // **SỬA LỖI**: Sử dụng hàm khởi tạo an toàn
+        const app = getFirebaseApp();
+        
         // Lấy AI instance và khởi tạo model với bộ công cụ được cung cấp
         const ai = getAI(app, { backend: new GoogleAIBackend() });
         modelWithTools = getGenerativeModel(ai, { 
-            model: "gemini-1.5-flash", 
+            model: "gemini-2.5-flash", 
             tools: [{ functionDeclarations }] 
         });
         
@@ -60,7 +66,7 @@ export function initializeAIModel(functionDeclarations) {
  * Gửi yêu cầu đến Gemini AI và nhận về các hành động cần thực thi.
  * @param {string} promptText - Yêu cầu bằng văn bản của người dùng.
  * @param {object} context - Thông tin bổ sung (vd: có bản vẽ không, các vật thể đang tồn tại).
- * @returns {Promise<Array|null>} - Một mảng các function calls hoặc null nếu có lỗi.
+ * @returns {Promise<object>} - Một đối tượng chứa explanation và functionCalls.
  */
 export async function callGeminiAPI(promptText, context = {}) {
     if (!chat) {
