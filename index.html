@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Physics Simulator v6.1 - Thruster Update</title>
+    <title>AI Physics Simulator v7.5 - Ground & Gravity Tune</title>
     
     <!-- Tích hợp Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -60,10 +60,12 @@
         /* Nâng cấp giao diện thanh trượt */
         input[type=range] { -webkit-appearance: none; background: transparent; }
         input[type=range]::-webkit-slider-runnable-track { height: 6px; background: #334155; border-radius: 3px; }
+        input[type=range]:disabled::-webkit-slider-runnable-track { background: #475569; }
         input[type=range]::-webkit-slider-thumb {
             -webkit-appearance: none; appearance: none; margin-top: -7px; width: 20px; height: 20px; background: var(--thumb-color, #3b82f6); cursor: pointer; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 5px rgba(0,0,0,0.3);
             transition: transform 0.1s ease-in-out, box-shadow 0.1s ease-in-out;
         }
+        input[type=range]:disabled::-webkit-slider-thumb { background: #64748b; cursor: not-allowed; }
         input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.1); box-shadow: 0 0 10px var(--thumb-color, #3b82f6); }
 
         /* Nâng cấp giao diện nút công cụ */
@@ -74,6 +76,7 @@
         .btn { transition: all 0.2s ease-in-out; }
         .btn:hover { transform: scale(1.05); filter: brightness(1.1); }
         .btn:active { transform: scale(0.98); filter: brightness(0.95); }
+        .btn.active { background-color: #3b82f6; color: white; }
         
         /* Scrollbar tùy chỉnh */
         ::-webkit-scrollbar { width: 8px; }
@@ -127,39 +130,69 @@
 
     <!-- Modal Hướng dẫn -->
     <div id="tutorialModal" class="fixed inset-0 z-[120] flex items-center justify-center p-4 modal-backdrop hidden">
-        <div class="card w-full max-w-2xl transform transition-all" role="dialog">
+        <div class="card w-full max-w-3xl transform transition-all" role="dialog">
             <div class="p-6">
                 <div class="flex justify-between items-center mb-4">
                     <h3 class="text-2xl font-bold text-white flex items-center gap-2"><i data-lucide="book-open" class="text-primary"></i> Hướng dẫn sử dụng</h3>
                     <button id="closeTutorialButton" class="p-2 rounded-full hover:bg-slate-700"><i data-lucide="x" class="w-5 h-5"></i></button>
                 </div>
                 <div class="text-slate-300 space-y-4 max-h-[70vh] overflow-y-auto pr-2">
-                    <div>
-                        <h4 class="font-semibold text-primary mb-1">1. Tương tác với AI</h4>
-                        <p>Nhập yêu cầu bằng ngôn ngữ tự nhiên vào ô "Yêu cầu của bạn" (ví dụ: "tạo một con lắc đơn dài 2m") rồi nhấn nút "Tạo mô phỏng". AI sẽ tự động phân tích và tạo ra các vật thể tương ứng.</p>
-                    </div>
-                    <div>
-                        <h4 class="font-semibold text-primary mb-1">2. Công cụ vẽ</h4>
-                        <p>Sử dụng "Bộ công cụ vẽ" để tự tay thiết kế kịch bản. Sau khi vẽ xong, bạn có thể ra lệnh cho AI (ví dụ: "biến hình vẽ thành vật thể") để AI chuyển chúng thành các đối tượng vật lý.</p>
-                    </div>
-                     <div>
-                        <h4 class="font-semibold text-primary mb-1">3. Điều khiển Camera</h4>
-                        <ul class="list-disc list-inside space-y-1 pl-2">
-                            <li><strong class="text-white">Phóng to/Thu nhỏ (Zoom):</strong> Dùng con lăn chuột.</li>
-                            <li><strong class="text-white">Di chuyển (Pan):</strong> Giữ chuột phải và kéo.</li>
-                        </ul>
-                    </div>
-                    <div>
-                        <h4 class="font-semibold text-primary mb-1">4. Tương tác với Vật thể</h4>
-                        <ul class="list-disc list-inside space-y-1 pl-2">
-                            <li><strong class="text-white">Di chuyển:</strong> Dùng chuột trái kéo/thả các vật thể.</li>
-                            <li><strong class="text-white">Xem thông số & Chỉnh sửa:</strong> Nhấp chuột trái vào một vật thể. Bảng thông số chi tiết sẽ hiện ở góc dưới bên trái, cho phép bạn xem và chỉnh sửa các thuộc tính như khối lượng, lực đẩy...</li>
-                            <li><strong class="text-white">Chọn nhiều vật thể:</strong> Giữ phím <kbd class="px-2 py-1 text-xs font-semibold text-gray-800 bg-gray-100 border border-gray-200 rounded-lg">Shift</kbd> và nhấp vào nhiều vật thể để so sánh chúng trên cùng một biểu đồ.</li>
-                        </ul>
-                    </div>
-                    <div>
-                        <h4 class="font-semibold text-primary mb-1">5. Lưu & Tải Kịch bản</h4>
-                        <p>Sử dụng nút <i data-lucide="folder-open" class="inline-block w-4 h-4"></i> (Quản lý Kịch bản) ở góc trên bên phải để lưu lại các thiết kế của bạn và tải lại chúng sau này.</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Cột trái -->
+                        <div class="space-y-4">
+                            <div>
+                                <h4 class="font-semibold text-primary mb-2 flex items-center gap-2"><i data-lucide="brain-circuit" class="w-5 h-5"></i>1. Tương tác với AI</h4>
+                                <p>Nhập yêu cầu bằng ngôn ngữ tự nhiên (ví dụ: "tạo một con lắc đơn dài 2m") rồi nhấn "Tạo mô phỏng". AI có thể tạo ra hầu hết các kịch bản vật lý cơ bản.</p>
+                                <p class="mt-2">Bạn cũng có thể vẽ hình trước, sau đó ra lệnh cho AI để biến chúng thành vật thể vật lý.</p>
+                            </div>
+                            <div>
+                                <h4 class="font-semibold text-primary mb-2 flex items-center gap-2"><i data-lucide="mouse-pointer-click" class="w-5 h-5"></i>2. Tương tác Vật thể</h4>
+                                <ul class="list-disc list-inside space-y-1 pl-2">
+                                    <li><strong class="text-white">Di chuyển:</strong> Dùng chuột trái kéo/thả các vật thể.</li>
+                                    <li><strong class="text-white">Xem & Chỉnh sửa (Vẽ):</strong> Nhấp chuột trái vào một <strong class="text-amber-400">hình đã vẽ</strong> để xem và chỉnh sửa thông số của nó.</li>
+                                    <li><strong class="text-white">Chọn & Phân tích (Vật lý):</strong> Nhấp chuột trái vào một <strong class="text-cyan-400">vật thể vật lý</strong> để xem thông số. Giữ phím <kbd class="px-2 py-1 text-xs font-semibold text-gray-800 bg-gray-100 border border-gray-200 rounded-lg">Shift</kbd> và nhấp vào nhiều vật thể để so sánh chúng trên biểu đồ.</li>
+                                </ul>
+                            </div>
+                            <div>
+                                <h4 class="font-semibold text-primary mb-2 flex items-center gap-2"><i data-lucide="camera" class="w-5 h-5"></i>3. Điều khiển Camera</h4>
+                                <ul class="list-disc list-inside space-y-1 pl-2">
+                                    <li><strong class="text-white">Phóng to/Thu nhỏ (Zoom):</strong> Dùng con lăn chuột.</li>
+                                    <li><strong class="text-white">Di chuyển (Pan):</strong> Giữ chuột phải và kéo.</li>
+                                </ul>
+                            </div>
+                             <div>
+                                <h4 class="font-semibold text-primary mb-2 flex items-center gap-2"><i data-lucide="folder-open" class="w-5 h-5"></i>4. Quản lý Kịch bản</h4>
+                                <p>Nhấn vào biểu tượng <i data-lucide="folder-open" class="inline-block w-4 h-4"></i> ở góc trên bên phải để mở trình quản lý. Bạn có thể lưu lại toàn bộ kịch bản hiện tại (bao gồm cả hình vẽ và thiết lập môi trường) và tải lại sau.</p>
+                            </div>
+                        </div>
+                        <!-- Cột phải -->
+                        <div class="space-y-4">
+                            <div>
+                                <h4 class="font-semibold text-primary mb-2 flex items-center gap-2"><i data-lucide="pencil-ruler" class="w-5 h-5"></i>5. Bộ Công cụ Vẽ</h4>
+                                <p>Chọn một công cụ để bắt đầu vẽ trên không gian mô phỏng. Sau khi vẽ xong, bạn có thể ra lệnh cho AI.</p>
+                                <ul class="list-disc list-inside space-y-1 pl-2 mt-1 text-sm">
+                                    <li><strong class="text-white">Hộp, Bóng, Tự do:</strong> Tạo các vật thể rắn cơ bản.</li>
+                                    <li><strong class="text-white">Hành tinh:</strong> Tạo một thiên thể tĩnh, có lực hấp dẫn mạnh.</li>
+                                    <li><strong class="text-white">Vật mềm:</strong> Tạo vật thể có thể biến dạng như vải hoặc thạch.</li>
+                                    <li><strong class="text-white">Tường:</strong> Tạo các đường thẳng tĩnh, không thể di chuyển.</li>
+                                    <li><strong class="text-white">Khớp, Lò xo:</strong> Dùng để nối hai vật thể lại với nhau.</li>
+                                    <li><strong class="text-white">Động cơ:</strong> Tạo một vật thể tĩnh có thể quay tròn.</li>
+                                </ul>
+                            </div>
+                            <div>
+                                <h4 class="font-semibold text-primary mb-2 flex items-center gap-2"><i data-lucide="globe-2" class="w-5 h-5"></i>6. Thiết lập Môi trường</h4>
+                                <p>Nhấn vào biểu tượng <i data-lucide="globe-2" class="inline-block w-4 h-4"></i> ở thanh điều khiển trung tâm để mở bảng thiết lập:</p>
+                                <ul class="list-disc list-inside space-y-1 pl-2 mt-1 text-sm">
+                                    <li>Điều chỉnh tốc độ mô phỏng, trọng lực, lực cản không khí.</li>
+                                    <li><strong class="text-white">Vẽ quỹ đạo:</strong> Bật để theo dõi đường đi của các vật thể được chọn.</li>
+                                    <li><strong class="text-white">Bật Hấp dẫn:</strong> Bật để các 'Hành tinh' bắt đầu hút vật thể khác (sẽ tắt trọng lực toàn cục).</li>
+                                </ul>
+                            </div>
+                            <div>
+                                <h4 class="font-semibold text-primary mb-2 flex items-center gap-2"><i data-lucide="layout-panel-bottom" class="w-5 h-5"></i>7. Bảng điều khiển dưới</h4>
+                                <p>Nhấn vào nút mũi tên ở cạnh dưới màn hình để mở rộng bảng điều khiển chứa phản hồi chi tiết từ AI và biểu đồ động học của các vật thể được chọn.</p>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -189,7 +222,7 @@
         <aside id="left-sidebar" style="--sidebar-width: 26rem;" class="w-[var(--sidebar-width)] bg-slate-800/60 p-6 flex flex-col shadow-2xl border-r border-slate-700">
             <div class="flex-shrink-0 mb-6 flex justify-between items-center">
                 <h1 class="text-2xl font-black text-white tracking-tighter">AI Physics <span class="text-primary">Simulator</span></h1>
-                <span class="text-xs bg-primary/50 text-white font-bold px-2 py-1 rounded-full">v6.1</span>
+                <span class="text-xs bg-accent/80 text-white font-bold px-2 py-1 rounded-full">v7.5</span>
             </div>
 
             <!-- Khu vực nhập liệu -->
@@ -223,6 +256,8 @@
                          <button class="draw-tool p-3 rounded-lg bg-slate-700/50 hover:bg-slate-700 flex flex-col items-center gap-1 text-xs" data-tool="freeform" title="Vẽ Tự do"><i data-lucide="pencil" class="w-5 h-5"></i><span>Tự do</span></button>
                          <button class="draw-tool p-3 rounded-lg bg-slate-700/50 hover:bg-slate-700 flex flex-col items-center gap-1 text-xs" data-tool="box" title="Vẽ Hộp"><i data-lucide="square" class="w-5 h-5"></i><span>Hộp</span></button>
                          <button class="draw-tool p-3 rounded-lg bg-slate-700/50 hover:bg-slate-700 flex flex-col items-center gap-1 text-xs" data-tool="circle" title="Vẽ Bóng"><i data-lucide="circle" class="w-5 h-5"></i><span>Bóng</span></button>
+                         <button class="draw-tool p-3 rounded-lg bg-slate-700/50 hover:bg-slate-700 flex flex-col items-center gap-1 text-xs" data-tool="planet" title="Vẽ Hành tinh (Hút các vật thể)"><i data-lucide="sun" class="w-5 h-5 text-yellow-400"></i><span>Hành tinh</span></button>
+                         <button class="draw-tool p-3 rounded-lg bg-slate-700/50 hover:bg-slate-700 flex flex-col items-center gap-1 text-xs" data-tool="softbody" title="Vẽ Vật thể mềm"><i data-lucide="grid-2x2" class="w-5 h-5 text-green-400"></i><span>Vật mềm</span></button>
                          <button class="draw-tool p-3 rounded-lg bg-slate-700/50 hover:bg-slate-700 flex flex-col items-center gap-1 text-xs" data-tool="wall" title="Vẽ Tường"><i data-lucide="ruler" class="w-5 h-5"></i><span>Tường</span></button>
                          <button class="draw-tool p-3 rounded-lg bg-slate-700/50 hover:bg-slate-700 flex flex-col items-center gap-1 text-xs" data-tool="joint" title="Nối vật thể"><i data-lucide="link" class="w-5 h-5"></i><span>Khớp</span></button>
                          <button class="draw-tool p-3 rounded-lg bg-slate-700/50 hover:bg-slate-700 flex flex-col items-center gap-1 text-xs" data-tool="spring" title="Tạo Lò xo"><i data-lucide="git-commit-vertical" class="w-5 h-5"></i><span>Lò xo</span></button>
@@ -234,11 +269,11 @@
                 <div id="example-prompts-container" class="card p-4">
                     <h3 class="font-semibold text-slate-300 mb-3">Thử các ví dụ sau:</h3>
                     <div class="grid grid-cols-2 gap-2 text-sm">
+                        <button class="example-prompt bg-slate-700/50 hover:bg-slate-700 p-2 rounded-lg text-left transition">Hệ mặt trời mini</button>
+                        <button class="example-prompt bg-slate-700/50 hover:bg-slate-700 p-2 rounded-lg text-left transition">Tấm vải rơi</button>
                         <button class="example-prompt bg-slate-700/50 hover:bg-slate-700 p-2 rounded-lg text-left transition">Con lắc đơn</button>
                         <button class="example-prompt bg-slate-700/50 hover:bg-slate-700 p-2 rounded-lg text-left transition">Hệ đòn bẩy</button>
-                        <button class="example-prompt bg-slate-700/50 hover:bg-slate-700 p-2 rounded-lg text-left transition">Va chạm đàn hồi</button>
                         <button class="example-prompt bg-slate-700/50 hover:bg-slate-700 p-2 rounded-lg text-left transition">Hệ Ròng Rọc</button>
-                        <button class="example-prompt bg-slate-700/50 hover:bg-slate-700 p-2 rounded-lg text-left transition">Sóng Cơ</button>
                         <button class="example-prompt bg-slate-700/50 hover:bg-slate-700 p-2 rounded-lg text-left transition">Con lắc Newton</button>
                     </div>
                 </div>
@@ -259,8 +294,9 @@
             <div id="canvas-container" class="flex-1 bg-slate-800/30 rounded-xl shadow-lg overflow-hidden relative border border-slate-700"></div>
             
             <!-- Bảng điều khiển chính -->
-            <div class="absolute top-8 left-1/2 -translate-x-1/2 card p-3 flex items-center gap-6 z-10">
+            <div class="absolute top-8 left-1/2 -translate-x-1/2 card p-3 flex items-center gap-4 z-10">
                 <button id="resetButton" class="btn p-3 rounded-full hover:bg-slate-700 transition" title="Đặt lại trạng thái"><i data-lucide="rotate-cw" class="w-6 h-6 text-slate-300"></i></button>
+                <button id="slowMoButton" class="btn p-3 rounded-full hover:bg-slate-700 transition" title="Chuyển động chậm"><i data-lucide="snail" class="w-6 h-6 text-slate-300"></i></button>
                 <button id="playPauseButton" class="btn p-3 bg-primary rounded-full hover:bg-primary-hover transition shadow-lg" title="Chạy/Dừng"><i id="playPauseIcon" data-lucide="pause" class="w-8 h-8 text-white"></i></button>
                 <button id="worldSettingsButton" class="btn p-3 rounded-full hover:bg-slate-700 transition" title="Thiết lập môi trường"><i data-lucide="globe-2" class="w-6 h-6 text-slate-300"></i></button>
             </div>
@@ -273,12 +309,12 @@
                     <input id="timeScaleSlider" type="range" min="0.1" max="2" step="0.1" value="1" class="w-full cursor-pointer">
                     <span id="timeScaleLabel" class="text-sm font-mono w-8">1.0x</span>
                 </div>
-                <div class="flex items-center gap-3" style="--thumb-color: #22c55e;">
+                <div id="gravity-y-container" class="flex items-center gap-3 transition-opacity" style="--thumb-color: #22c55e;">
                     <i data-lucide="arrow-down" class="w-5 h-5 text-slate-400" title="Trọng lực Y"></i>
                     <input id="gravityYSlider" type="range" min="-2" max="2" step="0.1" value="1" class="w-full cursor-pointer">
                     <span id="gravityYLabel" class="text-sm font-mono w-8 text-right">1.0</span>
                 </div>
-                <div class="flex items-center gap-3" style="--thumb-color: #22c55e;">
+                <div id="gravity-x-container" class="flex items-center gap-3 transition-opacity" style="--thumb-color: #22c55e;">
                     <i data-lucide="arrow-right" class="w-5 h-5 text-slate-400" title="Trọng lực X"></i>
                     <input id="gravityXSlider" type="range" min="-2" max="2" step="0.1" value="0" class="w-full cursor-pointer">
                     <span id="gravityXLabel" class="text-sm font-mono w-8 text-right">0.0</span>
@@ -291,6 +327,10 @@
                 <div class="flex items-center justify-between pt-2">
                     <label for="trailToggle" class="text-sm text-slate-300">Vẽ quỹ đạo</label>
                     <input type="checkbox" id="trailToggle" class="h-4 w-4 rounded border-slate-600 bg-slate-800 text-primary focus:ring-primary">
+                </div>
+                 <div class="flex items-center justify-between pt-2">
+                    <label for="planetaryGravityToggle" class="text-sm text-slate-300">Bật Hấp dẫn</label>
+                    <input type="checkbox" id="planetaryGravityToggle" class="h-4 w-4 rounded border-slate-600 bg-slate-800 text-primary focus:ring-primary">
                 </div>
             </div>
 
@@ -417,6 +457,7 @@
             playPauseButton: document.getElementById('playPauseButton'),
             playPauseIcon: document.getElementById('playPauseIcon'),
             resetButton: document.getElementById('resetButton'),
+            slowMoButton: document.getElementById('slowMoButton'),
             
             // World Settings
             worldSettingsButton: document.getElementById('worldSettingsButton'),
@@ -427,9 +468,12 @@
             gravityYLabel: document.getElementById('gravityYLabel'),
             gravityXSlider: document.getElementById('gravityXSlider'),
             gravityXLabel: document.getElementById('gravityXLabel'),
+            gravityYContainer: document.getElementById('gravity-y-container'),
+            gravityXContainer: document.getElementById('gravity-x-container'),
             airFrictionSlider: document.getElementById('airFrictionSlider'),
             airFrictionLabel: document.getElementById('airFrictionLabel'),
             trailToggle: document.getElementById('trailToggle'),
+            planetaryGravityToggle: document.getElementById('planetaryGravityToggle'),
 
             // Bottom Panel
             bottomPanel: document.getElementById('bottom-panel'),
@@ -481,6 +525,8 @@
         const { Engine, Render, Runner, World, Bodies, Composite, Composites, Mouse, MouseConstraint, Body, Constraint, Events, Vertices, Vector } = Matter;
         
         const PIXELS_PER_METER = 100;
+        // SỬA ĐỔI: Tinh chỉnh hằng số hấp dẫn để quỹ đạo ổn định hơn
+        const G_SCALED = 0.01; 
         let labObjects = {}; 
         let activeWaveGenerators = {};
         let activeMotors = [];
@@ -505,6 +551,10 @@
         let atwoodMachines = []; 
         let selectedBodies = [];
         let bodyColors = new Map();
+        let gravitySources = [];
+        let isPlanetaryGravityEnabled = false;
+        let lastGlobalGravity = { x: 0, y: 1 };
+        let isSlowMotion = false;
         const CHART_COLORS = ['#60a5fa', '#f87171', '#4ade80', '#facc15', '#a78bfa', '#22d3ee'];
 
         // Audio
@@ -513,7 +563,7 @@
         // Matter.js setup
         const engine = Engine.create();
         const world = engine.world;
-        engine.gravity.y = 1;
+        engine.gravity.y = 1; // Bắt đầu với trọng lực mặc định
         engine.world.frictionAir = 0.01;
 
         const render = Render.create({
@@ -524,7 +574,7 @@
                 height: dom.canvasContainer.clientHeight,
                 wireframes: false,
                 background: 'transparent',
-                hasBounds: true // Cần cho pan/zoom
+                hasBounds: true 
             }
         });
         Render.run(render);
@@ -543,7 +593,7 @@
         Events.on(render, 'afterRender', () => {
             const ctx = render.context;
             ctx.save();
-
+            
             // Vẽ lưới tọa độ
             ctx.strokeStyle = 'rgba(100, 116, 139, 0.2)';
             ctx.lineWidth = 1;
@@ -555,7 +605,7 @@
             for (let x = 1; x * PIXELS_PER_METER < render.options.width; x += 1) { ctx.fillText(`${x}m`, x * PIXELS_PER_METER, render.options.height - 20); }
             ctx.textAlign = 'left';
             for (let y = 1; y * PIXELS_PER_METER < render.options.height; y += 1) { ctx.fillText(`${y}m`, 20, render.options.height - (y * PIXELS_PER_METER)); }
-            
+
             // Vẽ quỹ đạo
             if (isTrailEnabled) {
                 selectedBodies.forEach(body => {
@@ -564,9 +614,7 @@
                         if (points.length > 1) {
                             ctx.beginPath();
                             ctx.moveTo(points[0].x, points[0].y);
-                            for (let i = 1; i < points.length; i++) {
-                                ctx.lineTo(points[i].x, points[i].y);
-                            }
+                            for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
                             ctx.strokeStyle = body.render.strokeStyle || 'rgba(236, 72, 153, 0.7)';
                             ctx.lineWidth = 2;
                             ctx.stroke();
@@ -593,6 +641,16 @@
                             break;
                         case 'box': ctx.rect(drawing.x, drawing.y, drawing.w, drawing.h); break;
                         case 'circle': ctx.arc(drawing.x, drawing.y, drawing.r, 0, Math.PI * 2); break;
+                        case 'planet': 
+                            ctx.arc(drawing.x, drawing.y, drawing.r, 0, Math.PI * 2); 
+                            ctx.fillStyle = 'rgba(250, 204, 21, 0.2)';
+                            ctx.fill();
+                            break;
+                        case 'softbody':
+                             ctx.rect(drawing.x, drawing.y, drawing.w, drawing.h);
+                             ctx.fillStyle = 'rgba(74, 222, 128, 0.2)';
+                             ctx.fill();
+                             break;
                         case 'wall': ctx.moveTo(drawing.x1, drawing.y1); ctx.lineTo(drawing.x2, drawing.y2); break;
                         case 'motor': 
                             ctx.arc(drawing.x, drawing.y, drawing.r, 0, Math.PI * 2);
@@ -645,10 +703,8 @@
                 const radius = pulley.circleRadius;
                 const posA = bodyA.position;
                 const posB = bodyB.position;
-                
                 const tangentLeft = { x: pulleyPos.x - radius, y: pulleyPos.y };
                 const tangentRight = { x: pulleyPos.x + radius, y: pulleyPos.y };
-
                 ctx.beginPath();
                 ctx.moveTo(posA.x, posA.y);
                 ctx.lineTo(tangentLeft.x, tangentLeft.y);
@@ -678,15 +734,19 @@
             initialStates.clear();
             trailPoints.clear();
             atwoodMachines = []; 
+            gravitySources = [];
             clearAllDrawings();
-            
-            // Add ground
-            const groundWidthM = 50;
-            const groundHeightM = 0.2;
-            const groundPosPx = worldToPixels({ x_m: groundWidthM / 2, y_m: groundHeightM / 2 });
-            const ground = Bodies.rectangle(groundPosPx.x, groundPosPx.y + (scaleToPixels(groundHeightM)/2), scaleToPixels(groundWidthM), scaleToPixels(groundHeightM), { isStatic: true, friction: 1.0, render: { fillStyle: '#334155' } });
-            World.add(world, ground);
 
+            // SỬA ĐỔI: Thêm mặt đất
+            const ground = Bodies.rectangle(
+                dom.canvasContainer.clientWidth / 2, 
+                dom.canvasContainer.clientHeight + 30, 
+                dom.canvasContainer.clientWidth * 2, // Làm mặt đất rộng hơn để tránh vật thể lọt qua ở cạnh
+                60, 
+                { isStatic: true, render: { fillStyle: '#475569' }, label: 'ground' }
+            );
+            World.add(world, ground);
+            
             // Add mouse control
             const mouse = Mouse.create(render.canvas);
             mouseConstraint = MouseConstraint.create(engine, { mouse: mouse, constraint: { stiffness: 0.2, render: { visible: false } } });
@@ -765,6 +825,38 @@
                 saveInitialState(ball);
                 return { success: true, message: `Đã tạo bóng '${label || ''}'.` };
             },
+            createPlanet: ({ radius_m, x_m, y_m, label, mass }) => {
+                const pos_px = worldToPixels({ x_m, y_m });
+                const planet = Bodies.circle(pos_px.x, pos_px.y, scaleToPixels(radius_m || 0.5), { 
+                    isStatic: true, 
+                    label, 
+                    render: { fillStyle: '#f59e0b' } 
+                });
+                Body.setMass(planet, mass || 500); // High mass for gravity
+                if (label) labObjects[label] = planet;
+                World.add(world, planet);
+                gravitySources.push(planet);
+                return { success: true, message: `Đã tạo hành tinh '${label}'.` };
+            },
+            createSoftBody: ({ x_m, y_m, width_m, height_m, columns, rows, stiffness, label }) => {
+                const pos_px = worldToPixels({ x_m, y_m });
+                const softBody = Composites.softBody(
+                    pos_px.x, pos_px.y, 
+                    columns, rows, 
+                    0, 0, true, 
+                    scaleToPixels(width_m) / columns, // particle radius
+                    {
+                        render: { fillStyle: '#4ade80' }
+                    },
+                    {
+                        stiffness: stiffness || 0.2,
+                        render: { type: 'line', anchors: false }
+                    }
+                );
+                if (label) labObjects[label] = softBody;
+                World.add(world, softBody);
+                return { success: true, message: `Đã tạo vật thể mềm.` };
+            },
             createPendulum: ({ length_m, anchorX_m, anchorY_m, label }) => {
                 const anchor_px = worldToPixels({ x_m: anchorX_m, y_m: anchorY_m });
                 const ball = Bodies.circle(anchor_px.x, anchor_px.y + scaleToPixels(length_m), scaleToPixels(0.15), { restitution: 0.9, friction: 0.001, density: 0.02, render: { fillStyle: '#f59e0b' }, label });
@@ -773,16 +865,6 @@
                 World.add(world, [ball, constraint]);
                 saveInitialState(ball);
                 return { success: true, message: `Đã tạo con lắc.` };
-            },
-            createSpringPendulum: ({ anchorX_m, anchorY_m, mass, stiffness, label }) => {
-                const anchor_px = worldToPixels({ x_m: anchorX_m, y_m: anchorY_m });
-                const ball = Bodies.circle(anchor_px.x, anchor_px.y + scaleToPixels(2.0), scaleToPixels(0.2), { render: { fillStyle: '#0891b2' }, label });
-                Body.setMass(ball, mass || 1);
-                if (label) labObjects[label] = ball;
-                const spring = Constraint.create({ pointA: anchor_px, bodyB: ball, stiffness: stiffness || 0.05, damping: 0.02, render: { strokeStyle: '#6b7280', lineWidth: 3, type: 'spring' } });
-                World.add(world, [ball, spring]);
-                saveInitialState(ball);
-                return { success: true, message: `Đã tạo con lắc lò xo.` };
             },
             createLever: ({ length_m, fulcrumX_m, fulcrumY_m, barLabel }) => {
                 const barPos_px = worldToPixels({x_m: fulcrumX_m, y_m: fulcrumY_m + 0.1});
@@ -796,24 +878,34 @@
                 saveInitialState(leverBar);
                 return { success: true, message: `Đã tạo đòn bẩy.`};
             },
-            createInclinedPlane: ({ angle_deg, x_m, length_m }) => {
-                const angle_rad = -angle_deg * (Math.PI / 180);
-                const width_px = scaleToPixels(length_m);
-                const height_px = 10;
-                const ground_y_m = 0.1;
-                const start_pos_px = worldToPixels({x_m: x_m, y_m: ground_y_m});
-                const center_x_px = start_pos_px.x + (width_px / 2) * Math.cos(angle_rad);
-                const center_y_px = start_pos_px.y + (width_px / 2) * Math.sin(angle_rad);
-                const plane = Bodies.rectangle(center_x_px, center_y_px, width_px, height_px, { isStatic: true, angle: angle_rad, friction: 1.0, render: { fillStyle: '#475569' } });
-                World.add(world, plane);
-                return { success: true, message: `Đã tạo mặt phẳng nghiêng ${angle_deg} độ.` };
+            createAtwoodMachine: ({ pulleyX_m, pulleyY_m, massA, labelA, massB, labelB }) => {
+                const pulleyPos = worldToPixels({ x_m: pulleyX_m, y_m: pulleyY_m });
+                const radius = scaleToPixels(0.3);
+                const pulley = Bodies.circle(pulleyPos.x, pulleyPos.y, radius, { isStatic: true, render: { fillStyle: '#84cc16' } });
+                const bodyA = Bodies.rectangle(pulleyPos.x - radius, pulleyPos.y + radius * 3, 40, 40, { mass: massA, label: labelA, render: { fillStyle: '#f97316' } });
+                const bodyB = Bodies.rectangle(pulleyPos.x + radius, pulleyPos.y + radius * 3, 40, 40, { mass: massB, label: labelB, render: { fillStyle: '#6366f1' } });
+                if (labelA) labObjects[labelA] = bodyA;
+                if (labelB) labObjects[labelB] = bodyB;
+                const rope = Constraint.create({ 
+                    bodyA, 
+                    bodyB, 
+                    length: scaleToPixels(4), 
+                    stiffness: 1, 
+                    render: { visible: false } 
+                });
+                World.add(world, [pulley, bodyA, bodyB, rope]);
+                atwoodMachines.push({ pulley, bodyA, bodyB }); 
+                saveInitialState(bodyA);
+                saveInitialState(bodyB);
+                return { success: true, message: `Đã tạo máy Atwood.` };
             },
-            setVelocity: ({ label, velocityX, velocityY }) => {
-                const body = labObjects[label];
-                if (!body) return { success: false, message: `Không tìm thấy vật thể có nhãn '${label}'.`};
-                const vel = { x: velocityX || 0, y: -(velocityY || 0) };
-                Body.setVelocity(body, vel);
-                return { success: true, message: `Đã đặt vận tốc cho '${label}'.`};
+            createNewtonCradle: ({ x_m, y_m, number, radius_m, separation_m }) => {
+                const pos = worldToPixels({ x_m, y_m });
+                const cradle = Composites.newtonsCradle(pos.x, pos.y, number, scaleToPixels(radius_m), scaleToPixels(separation_m * 5));
+                World.add(world, cradle);
+                cradle.bodies.forEach(saveInitialState);
+                Body.translate(cradle.bodies[0], { x: -scaleToPixels(separation_m * 2), y: -scaleToPixels(separation_m * 2) });
+                return { success: true, message: `Đã tạo con lắc Newton với ${number} quả cầu.` };
             },
             createConstraint: ({ labelA, labelB, anchorX, anchorY, type = 'joint' }) => {
                 const bodyA = labObjects[labelA];
@@ -832,6 +924,13 @@
                 const constraint = Constraint.create(options);
                 World.add(world, constraint);
                 return { success: true, message: `Đã tạo ${type}.` };
+            },
+            setVelocity: ({ label, velocityX, velocityY }) => {
+                const body = labObjects[label];
+                if (!body) return { success: false, message: `Không tìm thấy vật thể có nhãn '${label}'.`};
+                const vel = { x: velocityX || 0, y: -(velocityY || 0) };
+                Body.setVelocity(body, vel);
+                return { success: true, message: `Đã đặt vận tốc cho '${label}'.`};
             },
             createSceneFromDrawings: ({ objects }) => {
                 objects = objects || [];
@@ -862,6 +961,13 @@
                             break;
                         case 'box': body = Bodies.rectangle(drawing.x + drawing.w / 2, drawing.y + drawing.h / 2, drawing.w, drawing.h, options); break;
                         case 'circle': body = Bodies.circle(drawing.x, drawing.y, drawing.r, options); break;
+                        case 'planet': 
+                            body = Bodies.circle(drawing.x, drawing.y, drawing.r, { ...options, isStatic: true, render: { fillStyle: '#f59e0b' } });
+                            gravitySources.push(body);
+                            break;
+                        case 'softbody':
+                            body = Composites.softBody(drawing.x, drawing.y, Math.round(drawing.w/20), Math.round(drawing.h/20), 5, 5, true, 8, {render: {fillStyle: '#4ade80'}}, {stiffness: 0.2});
+                            break;
                         case 'wall':
                             const wallCenter = { x: (drawing.x1 + drawing.x2) / 2, y: (drawing.y1 + drawing.y2) / 2 };
                             const dx = drawing.x2 - drawing.x1; const dy = drawing.y2 - drawing.y1;
@@ -870,17 +976,19 @@
                             break;
                         case 'motor':
                             body = Bodies.circle(drawing.x, drawing.y, drawing.r, { ...options, isStatic: true });
-                            if (props.speed) {
-                                activeMotors.push({ body, speed: props.speed });
-                            }
+                            if (props.speed) activeMotors.push({ body, speed: props.speed });
                             break;
                     }
                     if (body) {
+                        if (body.type === 'composite') { // Soft body
+                            if (props.label) labObjects[props.label] = body;
+                            World.add(world, body);
+                            createdBodies[index] = body;
+                            return;
+                        }
                         if (typeof props.mass === 'number') Body.setMass(body, props.mass);
                         if (props.label) labObjects[props.label] = body;
-                        if (props.thrusterX || props.thrusterY) {
-                            body.plugin.thruster = { x: props.thrusterX || 0, y: props.thrusterY || 0 };
-                        }
+                        if (props.thrusterX || props.thrusterY) body.plugin.thruster = { x: props.thrusterX || 0, y: props.thrusterY || 0 };
                         World.add(world, body);
                         saveInitialState(body);
                         createdBodies[index] = body;
@@ -890,30 +998,16 @@
                 finalizedConstraints.forEach(constraint => {
                     const bodyA = constraint.indexA !== -1 ? createdBodies[constraint.indexA] : null;
                     const bodyB = constraint.indexB !== -1 ? createdBodies[constraint.indexB] : null;
-                    if (!bodyA && !bodyB) return;
+                    if (!bodyA || !bodyB) return; // Only connect two bodies for now
                     const constraintOptions = {
                         stiffness: constraint.type === 'spring' ? 0.05 : 1,
                         damping: constraint.type === 'spring' ? 0.02 : 0,
                         render: { type: constraint.type === 'spring' ? 'spring' : 'line', strokeStyle: '#94a3b8', lineWidth: 2 }
                     };
-                    if (bodyA) {
-                        constraintOptions.bodyA = bodyA;
-                        constraintOptions.pointA = { x: constraint.pointA.x - bodyA.position.x, y: constraint.pointA.y - bodyA.position.y };
-                    } else {
-                        constraintOptions.pointA = constraint.pointA;
-                    }
-                    if (bodyB) {
-                        constraintOptions.bodyB = bodyB;
-                        constraintOptions.pointB = { x: constraint.pointB.x - bodyB.position.x, y: constraint.pointB.y - bodyB.position.y };
-                    } else {
-                        constraintOptions.pointB = constraint.pointB;
-                    }
-                    if (!constraintOptions.bodyA) { // Swap if only B exists
-                        constraintOptions.bodyA = constraintOptions.bodyB;
-                        constraintOptions.pointA = constraintOptions.pointB;
-                        constraintOptions.bodyB = null;
-                        constraintOptions.pointB = constraint.pointA;
-                    }
+                    constraintOptions.bodyA = bodyA;
+                    constraintOptions.pointA = { x: constraint.pointA.x - bodyA.position.x, y: constraint.pointA.y - bodyA.position.y };
+                    constraintOptions.bodyB = bodyB;
+                    constraintOptions.pointB = { x: constraint.pointB.x - bodyB.position.x, y: constraint.pointB.y - bodyB.position.y };
                     World.add(world, Constraint.create(constraintOptions));
                 });
 
@@ -927,25 +1021,13 @@
                 Body.applyForce(body, body.position, scaledForce);
                 return { success: true, message: `Đã tác dụng lực (${forceX}, ${forceY})N lên '${label}'.`};
             },
-            applyThruster: ({ label, forceX, forceY }) => {
-                const body = labObjects[label];
-                if (!body) return { success: false, message: `Không tìm thấy vật thể '${label}'.` };
-                body.plugin.thruster = { x: forceX || 0, y: forceY || 0 };
-                return { success: true, message: `Đã gắn động cơ đẩy lên '${label}'.` };
-            },
-            createMotor: ({ label, speed }) => {
-                const body = labObjects[label];
-                if (!body) return { success: false, message: `Không tìm thấy vật thể '${label}'.` };
-                activeMotors.push({ body, speed: speed || 0.1 });
-                return { success: true, message: `Đã tạo động cơ cho '${label}' với tốc độ ${speed}.` };
-            },
             modifyObject: ({ label, properties }) => {
                 const body = labObjects[label];
                 if (!body) return { success: false, message: `Không tìm thấy vật thể '${label}'.` };
                 let messages = [];
                 for (const key in properties) {
                     const value = properties[key];
-                    if (value === undefined) continue; // Allow null/0
+                    if (value === undefined) continue;
                     switch (key) {
                         case 'mass': Body.setMass(body, value); messages.push(`khối lượng thành ${value}kg`); break;
                         case 'restitution': body.restitution = value; messages.push(`độ đàn hồi thành ${value}`); break;
@@ -972,10 +1054,7 @@
                     }
                 }
                 saveInitialState(body);
-                // Update UI if this is the currently selected body
-                if (selectedBodies.some(b => b.id === body.id)) {
-                    displayObjectDetails(body);
-                }
+                if (selectedBodies.some(b => b.id === body.id)) displayObjectDetails(body);
                 return { success: true, message: `Đã cập nhật ${messages.join(', ')} cho vật thể '${label}'.` };
             },
             deleteObject: ({ label }) => {
@@ -984,6 +1063,7 @@
                 World.remove(world, body);
                 delete labObjects[label];
                 initialStates.delete(body.id);
+                gravitySources = gravitySources.filter(s => s.id !== body.id);
                 const bodyIndex = selectedBodies.findIndex(b => b.id === body.id);
                 if (bodyIndex > -1) {
                     selectedBodies.splice(bodyIndex, 1);
@@ -991,92 +1071,24 @@
                 }
                 return { success: true, message: `Đã xóa vật thể '${label}'.` };
             },
-            createAtwoodMachine: ({ pulleyX_m, pulleyY_m, massA, labelA, massB, labelB }) => {
-                const pulleyPos = worldToPixels({ x_m: pulleyX_m, y_m: pulleyY_m });
-                const radius = scaleToPixels(0.3);
-                const pulley = Bodies.circle(pulleyPos.x, pulleyPos.y, radius, { isStatic: true, render: { fillStyle: '#84cc16' } });
-                const support = Bodies.rectangle(pulleyPos.x, pulleyPos.y - radius, 10, 20, { isStatic: true, render: { fillStyle: '#a8a29e' } });
-                const bodyA = Bodies.rectangle(pulleyPos.x - radius, pulleyPos.y + radius * 3, 40, 40, { mass: massA, label: labelA, render: { fillStyle: '#f97316' } });
-                const bodyB = Bodies.rectangle(pulleyPos.x + radius, pulleyPos.y + radius * 3, 40, 40, { mass: massB, label: labelB, render: { fillStyle: '#6366f1' } });
-                if (labelA) labObjects[labelA] = bodyA;
-                if (labelB) labObjects[labelB] = bodyB;
-                const atwoodComposite = Composite.create({ label: 'AtwoodMachine' });
-                Composite.add(atwoodComposite, [pulley, support, bodyA, bodyB]);
-                const rope = Constraint.create({ 
-                    bodyA, bodyB, length: scaleToPixels(4), stiffness: 1, render: { visible: false } 
-                });
-                Composite.add(atwoodComposite, [rope]);
-                World.add(world, atwoodComposite);
-                atwoodMachines.push({ pulley, bodyA, bodyB }); 
-                saveInitialState(bodyA);
-                saveInitialState(bodyB);
-                return { success: true, message: `Đã tạo máy Atwood.` };
-            },
-            createRope: ({ startX_m, startY_m, endX_m, endY_m, segments, label }) => {
-                const start = worldToPixels({ x_m: startX_m, y_m: startY_m });
-                const end = worldToPixels({ x_m: endX_m, y_m: endY_m });
-                const rope = Composites.stack(start.x, start.y, segments, 1, 10, 10, (x, y) => {
-                    return Bodies.rectangle(x, y, 20, 5, { 
-                        frictionAir: 0.01, density: 0.001, render: { fillStyle: '#f59e0b' }
-                    });
-                });
-                Composites.chain(rope, 0.5, 0, -0.5, 0, { stiffness: 1, length: 0, render: { visible: false } });
-                const firstBody = rope.bodies[0];
-                const lastBody = rope.bodies[rope.bodies.length - 1];
-                const startConstraint = Constraint.create({
-                    bodyB: firstBody, pointB: { x: -10, y: 0 }, pointA: { x: start.x, y: start.y }, stiffness: 0.9
-                });
-                const endConstraint = Constraint.create({
-                    bodyB: lastBody, pointB: { x: 10, y: 0 }, pointA: { x: end.x, y: end.y }, stiffness: 0.9
-                });
-                rope.startConstraint = startConstraint;
-                Composite.add(rope, [startConstraint, endConstraint]);
-                World.add(world, rope);
-                labObjects[label] = rope;
-                return { success: true, message: `Đã tạo sợi dây '${label}'.` };
-            },
-            startWave: ({ ropeLabel, amplitude_m, frequency_hz }) => {
-                const rope = labObjects[ropeLabel];
-                if (!rope || rope.type !== 'composite' || !rope.startConstraint) return { success: false, message: `Không tìm thấy sợi dây '${ropeLabel}'.` };
-                const amplitude_px = scaleToPixels(amplitude_m);
-                const startConstraint = rope.startConstraint;
-                const originalAnchorY = startConstraint.pointA.y;
-                activeWaveGenerators[ropeLabel] = (time) => {
-                    const dy = amplitude_px * Math.sin((time / 1000) * frequency_hz * 2 * Math.PI);
-                    startConstraint.pointA.y = originalAnchorY - dy;
-                };
-                return { success: true, message: `Bắt đầu tạo sóng trên '${ropeLabel}'.` };
-            },
-            createNewtonCradle: ({ x_m, y_m, number, radius_m, separation_m }) => {
-                const pos = worldToPixels({ x_m, y_m });
-                const cradle = Composites.newtonsCradle(pos.x, pos.y, number, scaleToPixels(radius_m), scaleToPixels(separation_m * 5));
-                World.add(world, cradle);
-                cradle.bodies.forEach(saveInitialState);
-                Body.translate(cradle.bodies[0], { x: -scaleToPixels(separation_m * 2), y: -scaleToPixels(separation_m * 2) });
-                return { success: true, message: `Đã tạo con lắc Newton với ${number} quả cầu.` };
-            },
         };
 
         const functionDeclarations = [
             { name: "clearSimulation", description: "Dọn dẹp, xóa tất cả các vật thể." },
             { name: "createBox", description: "Tạo một vật thể hình hộp.", parameters: { type: "OBJECT", properties: { width_m: { type: "NUMBER" }, height_m: { type: "NUMBER" }, x_m: { type: "NUMBER" }, y_m: { type: "NUMBER" }, label: { type: "STRING" }, mass: { type: "NUMBER" }, restitution: { type: "NUMBER" }, isStatic: { type: "BOOLEAN"}, velocityX: { type: "NUMBER" }, velocityY: { type: "NUMBER" } }, required: ["x_m", "y_m"] }},
             { name: "createBall", description: "Tạo một vật thể hình tròn.", parameters: { type: "OBJECT", properties: { radius_m: { type: "NUMBER" }, x_m: { type: "NUMBER" }, y_m: { type: "NUMBER" }, label: { type: "STRING" }, mass: { type: "NUMBER" }, restitution: { type: "NUMBER"}, velocityX: { type: "NUMBER" }, velocityY: { type: "NUMBER" } }, required: ["x_m", "y_m"] }},
+            { name: "createPlanet", description: "Tạo một hành tinh tĩnh, có khối lượng lớn để hút các vật thể khác.", parameters: { type: "OBJECT", properties: { radius_m: { type: "NUMBER" }, x_m: { type: "NUMBER" }, y_m: { type: "NUMBER" }, label: { type: "STRING" }, mass: { type: "NUMBER" } }, required: ["x_m", "y_m"] }},
+            { name: "createSoftBody", description: "Tạo một vật thể mềm, có thể biến dạng.", parameters: { type: "OBJECT", properties: { x_m: { type: "NUMBER" }, y_m: { type: "NUMBER" }, width_m: { type: "NUMBER" }, height_m: { type: "NUMBER" }, columns: { type: "NUMBER" }, rows: { type: "NUMBER" }, stiffness: { type: "NUMBER" }, label: {type: "STRING"} }, required: ["x_m", "y_m", "width_m", "height_m", "columns", "rows"] }},
             { name: "createPendulum", description: "Tạo một con lắc đơn.", parameters: { type: "OBJECT", properties: { length_m: { type: "NUMBER" }, anchorX_m: { type: "NUMBER" }, anchorY_m: { type: "NUMBER" }, label: { type: "STRING" }}, required: ["length_m", "anchorX_m", "anchorY_m"] }},
-            { name: "createSpringPendulum", description: "Tạo một con lắc lò xo.", parameters: { type: "OBJECT", properties: { anchorX_m: { type: "NUMBER" }, anchorY_m: { type: "NUMBER" }, mass: { type: "NUMBER" }, stiffness: { type: "NUMBER" }, label: { type: "STRING" } }, required: ["anchorX_m", "anchorY_m"] }},
             { name: "createLever", description: "Tạo một đòn bẩy.", parameters: { type: "OBJECT", properties: { length_m: { type: "NUMBER" }, fulcrumX_m: { type: "NUMBER" }, fulcrumY_m: { type: "NUMBER" }, barLabel: { type: "STRING" } }, required: ["length_m", "fulcrumX_m", "fulcrumY_m"] }},
-            { name: "createInclinedPlane", description: "Tạo một mặt phẳng nghiêng.", parameters: { type: "OBJECT", properties: { angle_deg: { type: "NUMBER" }, x_m: { type: "NUMBER" }, length_m: { type: "NUMBER" } }, required: ["angle_deg", "x_m", "length_m"] }},
+            { name: "createAtwoodMachine", description: "Tạo một hệ ròng rọc đơn (máy Atwood).", parameters: { type: "OBJECT", properties: { pulleyX_m: { type: "NUMBER" }, pulleyY_m: { type: "NUMBER" }, massA: { type: "NUMBER" }, labelA: { type: "STRING" }, massB: { type: "NUMBER" }, labelB: { type: "STRING" } }, required: ["pulleyX_m", "pulleyY_m", "massA", "labelA", "massB", "labelB"] }},
+            { name: "createNewtonCradle", description: "Tạo một con lắc Newton.", parameters: { type: "OBJECT", properties: { x_m: { type: "NUMBER" }, y_m: { type: "NUMBER" }, number: { type: "NUMBER", description: "Số lượng quả cầu" }, radius_m: { type: "NUMBER" }, separation_m: { type: "NUMBER", description: "Khoảng cách giữa các quả cầu" } }, required: ["x_m", "y_m", "number", "radius_m", "separation_m"] }},
+            { name: "createConstraint", description: "Tạo một liên kết (khớp nối hoặc lò xo) giữa các vật thể hoặc điểm.", parameters: { type: "OBJECT", properties: { labelA: { type: "STRING" }, labelB: { type: "STRING" }, anchorX: { type: "NUMBER" }, anchorY: { type: "NUMBER" }, type: { type: "STRING", "enum": ["joint", "spring"] } }, required: [] }},
             { name: "setVelocity", description: "Thiết lập vận tốc cho vật thể.", parameters: { type: "OBJECT", properties: { label: { type: "STRING" }, velocityX: { type: "NUMBER" }, velocityY: { type: "NUMBER" } }, required: ["label"] }},
-            { name: "applyForce", description: "Tác dụng một lực tức thời lên một vật thể.", parameters: { type: "OBJECT", properties: { label: { type: "STRING" }, forceX: { type: "NUMBER" }, forceY: { type: "NUMBER" } }, required: ["label"] }},
-            { name: "applyThruster", description: "Gắn một động cơ đẩy (lực liên tục) lên một vật thể.", parameters: { type: "OBJECT", properties: { label: { type: "STRING" }, forceX: { type: "NUMBER" }, forceY: { type: "NUMBER" } }, required: ["label", "forceX", "forceY"] }},
-            { name: "createMotor", description: "Biến một vật thể tĩnh thành một động cơ quay.", parameters: { type: "OBJECT", properties: { label: { type: "STRING" }, speed: { type: "NUMBER", description: "Tốc độ quay (rad/s)" } }, required: ["label", "speed"] }},
             { name: "createSceneFromDrawings", description: "Biến hình vẽ thành vật thể vật lý.", parameters: { type: "OBJECT", properties: { objects: { type: "ARRAY", items: { type: "OBJECT", properties: { drawingIndex: { type: "NUMBER" }, label: { type: "STRING" }, mass: { type: "NUMBER" }, restitution: { type: "NUMBER" }, friction: { type: "NUMBER" }, isStatic: { type: "BOOLEAN" }, speed: { type: "NUMBER" }, thrusterX: { type: "NUMBER" }, thrusterY: { type: "NUMBER" } }, required: ["drawingIndex"] } } } } },
-            { name: "createConstraint", description: "Tạo một liên kết (khớp nối hoặc lò xo).", parameters: { type: "OBJECT", properties: { labelA: { type: "STRING" }, labelB: { type: "STRING" }, anchorX: { type: "NUMBER" }, anchorY: { type: "NUMBER" }, type: { type: "STRING" } }, required: ["type"] } },
+            { name: "applyForce", description: "Tác dụng một lực tức thời lên một vật thể.", parameters: { type: "OBJECT", properties: { label: { type: "STRING" }, forceX: { type: "NUMBER" }, forceY: { type: "NUMBER" } }, required: ["label"] }},
             { name: "modifyObject", description: "Thay đổi thuộc tính của một vật thể.", parameters: { type: "OBJECT", properties: { label: { type: "STRING" }, properties: { type: "OBJECT", properties: { mass: { type: "NUMBER" }, restitution: { type: "NUMBER" }, friction: { type: "NUMBER" }, isStatic: { type: "BOOLEAN" }, angle_deg: { type: "NUMBER" }, label: { type: "STRING" }, thrusterX: {type: "NUMBER"}, thrusterY: {type: "NUMBER"} } } }, required: ["label", "properties"] } },
             { name: "deleteObject", description: "Xóa một vật thể.", parameters: { type: "OBJECT", properties: { label: { type: "STRING" } }, required: ["label"] } },
-            { name: "createAtwoodMachine", description: "Tạo một hệ ròng rọc đơn (máy Atwood).", parameters: { type: "OBJECT", properties: { pulleyX_m: { type: "NUMBER" }, pulleyY_m: { type: "NUMBER" }, massA: { type: "NUMBER" }, labelA: { type: "STRING" }, massB: { type: "NUMBER" }, labelB: { type: "STRING" } }, required: ["pulleyX_m", "pulleyY_m", "massA", "labelA", "massB", "labelB"] }},
-            { name: "createRope", description: "Tạo một sợi dây đàn hồi giữa hai điểm.", parameters: { type: "OBJECT", properties: { startX_m: { type: "NUMBER" }, startY_m: { type: "NUMBER" }, endX_m: { type: "NUMBER" }, endY_m: { type: "NUMBER" }, segments: { type: "NUMBER", description: "Số lượng đoạn dây." }, label: { type: "STRING" } }, required: ["startX_m", "startY_m", "endX_m", "endY_m", "segments", "label"] }},
-            { name: "startWave", description: "Bắt đầu tạo sóng cơ học trên một sợi dây.", parameters: { type: "OBJECT", properties: { ropeLabel: { type: "STRING" }, amplitude_m: { type: "NUMBER" }, frequency_hz: { type: "NUMBER" } }, required: ["ropeLabel", "amplitude_m", "frequency_hz"] }},
-            { name: "createNewtonCradle", description: "Tạo một con lắc Newton.", parameters: { type: "OBJECT", properties: { x_m: { type: "NUMBER" }, y_m: { type: "NUMBER" }, number: { type: "NUMBER", description: "Số lượng quả cầu" }, radius_m: { type: "NUMBER" }, separation_m: { type: "NUMBER", description: "Khoảng cách giữa các quả cầu" } }, required: ["x_m", "y_m", "number", "radius_m", "separation_m"] }},
         ];
         
         // Khởi tạo mô hình AI
@@ -1102,11 +1114,9 @@
                 dom.sendPromptButton.disabled = true;
 
                 let context = `Bối cảnh: Người dùng đã vẽ ${finalizedDrawings.length} hình và ${finalizedConstraints.length} liên kết. Nhiệm vụ của bạn là phân tích các hình vẽ và yêu cầu của người dùng để tạo ra một kịch bản vật lý thực tế.`;
-                context += `\n1. **Phân tích Hình dạng:** Xác định vai trò của mỗi hình vẽ. Ví dụ, một hình tam giác hoặc một hình nhỏ nằm dưới một thanh dài có thể là một điểm tựa (fulcrum). Một thanh dài có thể là đòn bẩy (lever). Một hình tròn có thể là quả bóng (ball). Một hình tròn được vẽ bằng công cụ motor là động cơ.`;
-                context += `\n2. **Gọi Hàm createSceneFromDrawings:** Gọi hàm này để tạo tất cả các vật thể. Khi gọi, hãy chỉ định các thuộc tính quan trọng:`;
-                context += `\n   - \`isStatic: true\` cho các vật thể đóng vai trò là nền tảng, điểm tựa, hoặc động cơ. Đây là điều RẤT QUAN TRỌNG để các hệ thống hoạt động chính xác.`;
-                context += `\n   - \`label\` cho các vật thể chính để có thể tham chiếu chúng sau này.`;
-                context += `\n   - \`speed\` cho các vật thể là động cơ.`;
+                context += `\n- Hình vẽ 'planet' là một thiên thể tĩnh có lực hấp dẫn.`;
+                context += `\n- Hình vẽ 'softbody' là một vật thể mềm.`;
+                context += `\n- Gọi hàm createSceneFromDrawings để tạo tất cả các vật thể.`;
 
                 if (promptText) {
                     context += `\n\nYêu cầu cụ thể của người dùng là: "${promptText}". Hãy sử dụng thông tin này để thực hiện các bước trên.`;
@@ -1195,40 +1205,49 @@
         let startTime;
         let chartData = { labels: [], datasets: [] };
         
-        function updateSimulationData() {
+        function updateSimulationData(event) {
             const time = engine.timing.timestamp;
-            // Cập nhật sóng
-            for (const label in activeWaveGenerators) {
-                if (activeWaveGenerators.hasOwnProperty(label)) {
-                    activeWaveGenerators[label](time);
-                }
-            }
-
+            
             // Cập nhật động cơ và lực đẩy
             Composite.allBodies(world).forEach(body => {
-                // Lực đẩy
                 if (body.plugin && body.plugin.thruster) {
                     const force = body.plugin.thruster;
                     const worldForce = Vector.rotate({ x: force.x, y: -force.y }, body.angle);
                     Body.applyForce(body, body.position, Vector.mult(worldForce, 0.001));
                 }
             });
-            activeMotors.forEach(motor => {
-                Body.setAngularVelocity(motor.body, motor.speed);
-            });
+            activeMotors.forEach(motor => Body.setAngularVelocity(motor.body, motor.speed));
 
+            // Cập nhật lực hấp dẫn
+            if (isPlanetaryGravityEnabled) {
+                const bodies = Composite.allBodies(world);
+                for (let i = 0; i < gravitySources.length; i++) {
+                    const source = gravitySources[i];
+                    for (let j = 0; j < bodies.length; j++) {
+                        const body = bodies[j];
+                        if (source.id === body.id || body.isStatic) continue;
+                        
+                        const dx = source.position.x - body.position.x;
+                        const dy = source.position.y - body.position.y;
+                        const distanceSq = dx * dx + dy * dy;
+                        if (distanceSq < 100) continue;
+                        
+                        const forceMagnitude = (G_SCALED * source.mass * body.mass) / distanceSq;
+                        const force = { x: dx, y: dy };
+                        const forceNormalized = Vector.normalise(force);
+                        
+                        Body.applyForce(body, body.position, Vector.mult(forceNormalized, forceMagnitude));
+                    }
+                }
+            }
 
             // Cập nhật quỹ đạo
             if (isTrailEnabled) {
                 selectedBodies.forEach(body => {
-                    if (!trailPoints.has(body.id)) {
-                        trailPoints.set(body.id, []);
-                    }
+                    if (!trailPoints.has(body.id)) trailPoints.set(body.id, []);
                     const points = trailPoints.get(body.id);
                     points.push({ ...body.position });
-                    if (points.length > 200) { // Giới hạn độ dài quỹ đạo
-                        points.shift();
-                    }
+                    if (points.length > 200) points.shift();
                 });
             }
             
@@ -1238,28 +1257,18 @@
                 if (chartData.labels.length > 100) { chartData.labels.shift(); chartData.datasets.forEach(ds => ds.data.shift()); }
                 chartData.labels.push(timeInSeconds.toFixed(1));
                 
-                const G = Math.abs(engine.gravity.y * 9.81);
-                
                 selectedBodies.forEach((body, index) => {
                     if (body.isStatic) return;
-                    const speedDatasetIndex = index * 4;
-                    const kineticEnergyDatasetIndex = index * 4 + 1;
-                    const potentialEnergyDatasetIndex = index * 4 + 2;
-                    const totalEnergyDatasetIndex = index * 4 + 3;
-
+                    const speedDatasetIndex = index * 2;
+                    const kineticEnergyDatasetIndex = index * 2 + 1;
+                    
                     const vx_ms = body.velocity.x;
                     const vy_ms = -body.velocity.y;
                     const speed_ms = Math.sqrt(vx_ms*vx_ms + vy_ms*vy_ms);
-                    
-                    const height_m = pixelsToWorld({x_px: 0, y_px: body.position.y}).y_m;
-                    const potentialEnergy = body.mass * G * height_m;
                     const kineticEnergy = 0.5 * body.mass * (speed_ms * speed_ms);
-                    const totalEnergy = potentialEnergy + kineticEnergy;
                     
                     if (chartData.datasets[speedDatasetIndex]) chartData.datasets[speedDatasetIndex].data.push(speed_ms);
                     if (chartData.datasets[kineticEnergyDatasetIndex]) chartData.datasets[kineticEnergyDatasetIndex].data.push(kineticEnergy);
-                    if (chartData.datasets[potentialEnergyDatasetIndex]) chartData.datasets[potentialEnergyDatasetIndex].data.push(potentialEnergy);
-                    if (chartData.datasets[totalEnergyDatasetIndex]) chartData.datasets[totalEnergyDatasetIndex].data.push(totalEnergy);
                 });
 
                 motionChart.update('none');
@@ -1275,6 +1284,7 @@
             }
 
             const thruster = body.plugin.thruster || { x: 0, y: 0 };
+            const isPlanet = gravitySources.some(s => s.id === body.id);
 
             dom.objectDetails.innerHTML = `
                 <h3 class="font-bold text-lg text-primary mb-2 truncate">${body.label || 'Vật thể không tên'}</h3>
@@ -1282,28 +1292,31 @@
                     <label for="detailsMass" class="text-slate-400 self-center">Khối lượng (kg):</label>
                     <input type="number" id="detailsMass" value="${body.mass.toFixed(2)}" class="w-full p-1 bg-slate-800 border border-slate-600 rounded text-white font-mono text-right">
                     
+                    ${!isPlanet ? `
                     <label class="text-slate-400 self-center col-span-2 font-semibold mt-1 border-t border-slate-700 pt-2">Lực đẩy (Thruster)</label>
                     <label for="detailsThrusterX" class="text-slate-400 self-center">Lực X:</label>
                     <input type="number" step="0.001" id="detailsThrusterX" value="${thruster.x}" class="w-full p-1 bg-slate-800 border border-slate-600 rounded text-white font-mono text-right">
                     
                     <label for="detailsThrusterY" class="text-slate-400 self-center">Lực Y:</label>
                     <input type="number" step="0.001" id="detailsThrusterY" value="${thruster.y}" class="w-full p-1 bg-slate-800 border border-slate-600 rounded text-white font-mono text-right">
+                    ` : ''}
                 </div>
             `;
             
-            // Add event listeners for the new input fields
             document.getElementById('detailsMass').addEventListener('change', (e) => {
                 Body.setMass(body, parseFloat(e.target.value));
                 saveInitialState(body);
             });
-            document.getElementById('detailsThrusterX').addEventListener('change', (e) => {
-                if (!body.plugin.thruster) body.plugin.thruster = { x: 0, y: 0 };
-                body.plugin.thruster.x = parseFloat(e.target.value) || 0;
-            });
-             document.getElementById('detailsThrusterY').addEventListener('change', (e) => {
-                if (!body.plugin.thruster) body.plugin.thruster = { x: 0, y: 0 };
-                body.plugin.thruster.y = parseFloat(e.target.value) || 0;
-            });
+            if (!isPlanet) {
+                document.getElementById('detailsThrusterX').addEventListener('change', (e) => {
+                    if (!body.plugin.thruster) body.plugin.thruster = { x: 0, y: 0 };
+                    body.plugin.thruster.x = parseFloat(e.target.value) || 0;
+                });
+                 document.getElementById('detailsThrusterY').addEventListener('change', (e) => {
+                    if (!body.plugin.thruster) body.plugin.thruster = { x: 0, y: 0 };
+                    body.plugin.thruster.y = parseFloat(e.target.value) || 0;
+                });
+            }
 
             // Re-create chart for all selected bodies
             if (motionChart) motionChart.destroy();
@@ -1314,9 +1327,7 @@
                 const label = b.label || `Vật ${b.id}`;
                 newDatasets.push(
                     { label: `Tốc độ (${label})`, data: [], borderColor: color, tension: 0.1, yAxisID: 'y-velocity', borderWidth: 2, pointRadius: 0 },
-                    { label: `Động năng (${label})`, data: [], borderColor: color, tension: 0.1, yAxisID: 'y-energy', borderWidth: 2, pointRadius: 0, hidden: true },
-                    { label: `Thế năng (${label})`, data: [], borderColor: color, tension: 0.1, yAxisID: 'y-energy', borderWidth: 2, pointRadius: 0, hidden: true },
-                    { label: `Cơ năng (${label})`, data: [], borderColor: color, tension: 0.1, yAxisID: 'y-energy', borderWidth: 2, pointRadius: 0, borderDash: [5, 5], hidden: true }
+                    { label: `Động năng (${label})`, data: [], borderColor: color, tension: 0.1, yAxisID: 'y-energy', borderWidth: 2, pointRadius: 0, hidden: false }
                 );
             });
 
@@ -1348,11 +1359,13 @@
             else dom.statusMessage.classList.add('text-slate-400');
         }
 
+        // SỬA ĐỔI: Khởi tạo lại chat session mỗi lần nhấn nút để đảm bảo yêu cầu độc lập
         dom.sendPromptButton.addEventListener("click", () => {
              const modelWithTools = getGenerativeModel(getAI(app, { backend: new GoogleAIBackend() }), { model: "gemini-2.5-flash", tools: [{ functionDeclarations }] });
              chat = modelWithTools.startChat();
              callGeminiAPI();
         });
+
         dom.promptInput.addEventListener("keydown", (event) => {
             if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); dom.sendPromptButton.click(); }
         });
@@ -1374,15 +1387,25 @@
             dom.playPauseIcon.outerHTML = `<i id="playPauseIcon" data-lucide="${isSimulationRunning ? 'pause' : 'play'}" class="w-8 h-8 text-white"></i>`;
             lucide.createIcons();
         });
+        
+        dom.slowMoButton.addEventListener('click', () => {
+            isSlowMotion = !isSlowMotion;
+            dom.slowMoButton.classList.toggle('active', isSlowMotion);
+            engine.timing.timeScale = isSlowMotion ? 0.25 : parseFloat(dom.timeScaleSlider.value);
+        });
 
         dom.resetButton.addEventListener('click', () => {
             for (const [id, state] of initialStates) {
-                const body = Composite.get(world, id, 'body');
+                const body = Composite.get(world, id, 'body') || Composite.get(world, id, 'composite');
                 if (body) {
-                    Body.setPosition(body, state.position);
-                    Body.setAngle(body, state.angle);
-                    Body.setVelocity(body, state.velocity);
-                    Body.setAngularVelocity(body, state.angularVelocity);
+                    if (body.type === 'composite') {
+                        // Can't easily reset soft bodies, so just remove and recreate if needed.
+                    } else {
+                        Body.setPosition(body, state.position);
+                        Body.setAngle(body, state.angle);
+                        Body.setVelocity(body, state.velocity);
+                        Body.setAngularVelocity(body, state.angularVelocity);
+                    }
                 }
             }
             if (!isSimulationRunning) { Runner.tick(runner, engine); }
@@ -1390,42 +1413,45 @@
 
         // World settings event listeners
         dom.timeScaleSlider.addEventListener('input', (e) => {
-            engine.timing.timeScale = parseFloat(e.target.value);
-            dom.timeScaleLabel.textContent = `${engine.timing.timeScale.toFixed(1)}x`;
+            const scale = parseFloat(e.target.value);
+            engine.timing.timeScale = scale;
+            dom.timeScaleLabel.textContent = `${scale.toFixed(1)}x`;
+            isSlowMotion = false;
+            dom.slowMoButton.classList.remove('active');
         });
-        dom.gravityYSlider.addEventListener('input', (e) => {
-            engine.gravity.y = parseFloat(e.target.value);
-            dom.gravityYLabel.textContent = engine.gravity.y.toFixed(1);
-        });
-        dom.gravityXSlider.addEventListener('input', (e) => {
-            engine.gravity.x = parseFloat(e.target.value);
-            dom.gravityXLabel.textContent = engine.gravity.x.toFixed(1);
-        });
+        dom.gravityYSlider.addEventListener('input', (e) => { engine.gravity.y = parseFloat(e.target.value); dom.gravityYLabel.textContent = engine.gravity.y.toFixed(1); });
+        dom.gravityXSlider.addEventListener('input', (e) => { engine.gravity.x = parseFloat(e.target.value); dom.gravityXLabel.textContent = engine.gravity.x.toFixed(1); });
         dom.airFrictionSlider.addEventListener('input', (e) => {
             const friction = parseFloat(e.target.value);
             engine.world.frictionAir = friction;
             Composite.allBodies(world).forEach(body => { body.frictionAir = friction; });
             dom.airFrictionLabel.textContent = friction.toFixed(3);
         });
-        dom.worldSettingsButton.addEventListener('click', () => {
-            dom.worldSettingsPanel.classList.toggle('hidden');
-        });
-        dom.trailToggle.addEventListener('change', (e) => {
-            isTrailEnabled = e.target.checked;
-            if (!isTrailEnabled) {
-                trailPoints.clear();
+        dom.worldSettingsButton.addEventListener('click', () => dom.worldSettingsPanel.classList.toggle('hidden'));
+        dom.trailToggle.addEventListener('change', (e) => { isTrailEnabled = e.target.checked; if (!isTrailEnabled) trailPoints.clear(); });
+        
+        dom.planetaryGravityToggle.addEventListener('change', (e) => {
+            isPlanetaryGravityEnabled = e.target.checked;
+            if (isPlanetaryGravityEnabled) {
+                lastGlobalGravity = { ...engine.gravity };
+                engine.gravity.x = 0;
+                engine.gravity.y = 0;
+                dom.gravityXSlider.disabled = true;
+                dom.gravityYSlider.disabled = true;
+                dom.gravityXContainer.style.opacity = 0.5;
+                dom.gravityYContainer.style.opacity = 0.5;
+            } else {
+                engine.gravity = { ...lastGlobalGravity };
+                dom.gravityXSlider.disabled = false;
+                dom.gravityYSlider.disabled = false;
+                dom.gravityXContainer.style.opacity = 1;
+                dom.gravityYContainer.style.opacity = 1;
             }
         });
 
         // Responsive sidebar logic
-        dom.openSidebarButton.addEventListener('click', () => {
-            dom.leftSidebar.classList.add('open');
-            dom.sidebarBackdrop.classList.remove('hidden');
-        });
-        function closeSidebar() {
-            dom.leftSidebar.classList.remove('open');
-            dom.sidebarBackdrop.classList.add('hidden');
-        }
+        dom.openSidebarButton.addEventListener('click', () => { dom.leftSidebar.classList.add('open'); dom.sidebarBackdrop.classList.remove('hidden'); });
+        function closeSidebar() { dom.leftSidebar.classList.remove('open'); dom.sidebarBackdrop.classList.add('hidden'); }
         dom.sidebarBackdrop.addEventListener('click', closeSidebar);
         
         // ============================================
@@ -1444,6 +1470,7 @@
             switch (activeDrawTool) {
                 case 'freeform': currentDrawing.path.push(currentPoint); break;
                 case 'box':
+                case 'softbody':
                     currentDrawing.x = Math.min(drawStartPoint.x, currentPoint.x);
                     currentDrawing.y = Math.min(drawStartPoint.y, currentPoint.y);
                     currentDrawing.w = Math.abs(drawStartPoint.x - currentPoint.x);
@@ -1451,6 +1478,7 @@
                     break;
                 case 'circle':
                 case 'motor':
+                case 'planet':
                     currentDrawing.x = drawStartPoint.x; currentDrawing.y = drawStartPoint.y;
                     const dx = currentPoint.x - drawStartPoint.x; const dy = currentPoint.y - drawStartPoint.y;
                     currentDrawing.r = Math.sqrt(dx*dx + dy*dy);
@@ -1464,13 +1492,11 @@
         function endDraw() {
             if (!isDrawing) return;
             isDrawing = false;
-            if ((currentDrawing.type === 'circle' || currentDrawing.type === 'motor') && (!currentDrawing.r || currentDrawing.r < 2)) { currentDrawing = {}; return; }
-            if (currentDrawing.type === 'box' && (!currentDrawing.w || currentDrawing.w < 2 || !currentDrawing.h || currentDrawing.h < 2)) { currentDrawing = {}; return; }
+            if ((['circle', 'motor', 'planet'].includes(currentDrawing.type)) && (!currentDrawing.r || currentDrawing.r < 2)) { currentDrawing = {}; return; }
+            if ((['box', 'softbody'].includes(currentDrawing.type)) && (!currentDrawing.w || currentDrawing.w < 2 || !currentDrawing.h || currentDrawing.h < 2)) { currentDrawing = {}; return; }
             if (currentDrawing.type === 'wall' && currentDrawing.x1 === currentDrawing.x2 && currentDrawing.y1 === currentDrawing.y2) { currentDrawing = {}; return; }
-            if (currentDrawing.type === 'motor') {
-                currentDrawing.properties.isStatic = true;
-                currentDrawing.properties.speed = 0.1; // Default speed
-            }
+            if (currentDrawing.type === 'motor') { currentDrawing.properties.isStatic = true; currentDrawing.properties.speed = 0.1; }
+            if (currentDrawing.type === 'planet') { currentDrawing.properties.isStatic = true; currentDrawing.properties.mass = 500; }
             finalizedDrawings.push({ ...currentDrawing });
             currentDrawing = {};
         }
@@ -1479,8 +1505,11 @@
             switch (drawing.type) {
                 case 'circle': 
                 case 'motor':
+                case 'planet':
                     return { x: drawing.x, y: drawing.y };
-                case 'box': return { x: drawing.x + drawing.w / 2, y: drawing.y + drawing.h / 2 };
+                case 'box': 
+                case 'softbody':
+                    return { x: drawing.x + drawing.w / 2, y: drawing.y + drawing.h / 2 };
                 case 'freeform': return Vertices.centre(drawing.path);
                 case 'wall': return { x: (drawing.x1 + drawing.x2) / 2, y: (drawing.y1 + drawing.y2) / 2 };
                 default: return null;
@@ -1508,7 +1537,7 @@
             }
         }
         function toggleDrawTool(tool) {
-            const isShapeTool = ['freeform', 'box', 'circle', 'wall', 'motor'].includes(tool);
+            const isShapeTool = ['box', 'circle', 'wall', 'motor', 'planet', 'softbody', 'freeform'].includes(tool);
             const isConnectionTool = ['joint', 'spring'].includes(tool);
             if (activeDrawTool) {
                 document.querySelector(`.draw-tool[data-tool="${activeDrawTool}"]`)?.classList.remove('active');
@@ -1549,8 +1578,11 @@
             switch (drawing.type) {
                 case 'circle':
                 case 'motor':
+                case 'planet':
                     const dx = point.x - drawing.x; const dy = point.y - drawing.y; return Math.sqrt(dx*dx + dy*dy) < drawing.r;
-                case 'box': return (point.x > drawing.x && point.x < drawing.x + drawing.w && point.y > drawing.y && point.y < drawing.y + drawing.h);
+                case 'box': 
+                case 'softbody':
+                    return (point.x > drawing.x && point.x < drawing.x + drawing.w && point.y > drawing.y && point.y < drawing.y + drawing.h);
                 case 'freeform': return isPointInPolygon(point, drawing.path);
                 case 'wall':
                 default: return false;
@@ -1638,19 +1670,14 @@
         }
         function toggleBodySelection(body) {
             const index = selectedBodies.findIndex(b => b.id === body.id);
-            if (index > -1) {
-                removeBodyFromSelection(body);
-            } else {
-                addBodyToSelection(body);
-            }
+            if (index > -1) removeBodyFromSelection(body);
+            else addBodyToSelection(body);
         }
         function addBodyToSelection(body) {
             if (!body || selectedBodies.find(b => b.id === body.id)) return;
             selectedBodies.push(body);
             if (body.render) {
-                if (!bodyColors.has(body.id)) {
-                    bodyColors.set(body.id, { fill: body.render.fillStyle, stroke: body.render.strokeStyle });
-                }
+                if (!bodyColors.has(body.id)) bodyColors.set(body.id, { fill: body.render.fillStyle, stroke: body.render.strokeStyle });
                 const color = CHART_COLORS[(selectedBodies.length - 1) % CHART_COLORS.length];
                 body.render.fillStyle = color;
                 body.render.strokeStyle = '#ffffff';
@@ -1680,61 +1707,35 @@
         let isPanning = false;
         let panStart = { x: 0, y: 0 };
         render.canvas.addEventListener('mousedown', (e) => {
-            if (e.button === 2) { // Right mouse button
-                isPanning = true;
-                panStart = { x: e.clientX, y: e.clientY };
-                render.canvas.style.cursor = 'move';
-                e.preventDefault();
-            }
+            if (e.button === 2) { isPanning = true; panStart = { x: e.clientX, y: e.clientY }; render.canvas.style.cursor = 'move'; e.preventDefault(); }
         });
         window.addEventListener('mousemove', (e) => {
             if (isPanning) {
-                const dx = e.clientX - panStart.x;
-                const dy = e.clientY - panStart.y;
+                const dx = e.clientX - panStart.x; const dy = e.clientY - panStart.y;
                 panStart = { x: e.clientX, y: e.clientY };
-                Render.lookAt(render, Composite.allBodies(engine.world), {
-                    x: -dx,
-                    y: -dy
-                }, false);
+                Render.lookAt(render, Composite.allBodies(engine.world), { x: -dx, y: -dy }, false);
             }
         });
-        window.addEventListener('mouseup', (e) => {
-            if (e.button === 2) {
-                isPanning = false;
-                render.canvas.style.cursor = 'grab';
-            }
-        });
+        window.addEventListener('mouseup', (e) => { if (e.button === 2) { isPanning = false; render.canvas.style.cursor = 'grab'; } });
         render.canvas.addEventListener('wheel', (e) => {
             e.preventDefault();
             const zoomFactor = e.deltaY < 0 ? 0.9 : 1.1;
-            const mousePosition = { x: e.offsetX, y: e.offsetY };
-            
-            // Translate view to center on mouse, zoom, then translate back
-            Render.lookAt(render, Composite.allBodies(engine.world), {
-                x: mousePosition.x,
-                y: mousePosition.y
-            }, false);
-
-            render.bounds.min.x *= zoomFactor;
-            render.bounds.max.x *= zoomFactor;
-            render.bounds.min.y *= zoomFactor;
-            render.bounds.max.y *= zoomFactor;
-
-            Render.lookAt(render, Composite.allBodies(engine.world), {
-                x: -mousePosition.x,
-                y: -mousePosition.y
-            }, false);
+            render.bounds.min.x = render.mouse.position.x - (render.mouse.position.x - render.bounds.min.x) * zoomFactor;
+            render.bounds.max.x = render.mouse.position.x + (render.bounds.max.x - render.mouse.position.x) * zoomFactor;
+            render.bounds.min.y = render.mouse.position.y - (render.mouse.position.y - render.bounds.min.y) * zoomFactor;
+            render.bounds.max.y = render.mouse.position.y + (render.bounds.max.y - render.mouse.position.y) * zoomFactor;
         });
         render.canvas.addEventListener('contextmenu', e => e.preventDefault());
 
 
         // --- Khôi phục các ví dụ ---
         const examplePrompts = {
+            // SỬA ĐỔI: Cập nhật ví dụ hệ mặt trời với thông số ổn định hơn
+            "Hệ mặt trời mini": "Tạo một hành tinh lớn tên 'mặt trời' ở (6, 5) với khối lượng 2000. Tạo một quả bóng tên 'trái đất' ở (6, 8) với vận tốc ngang 2.2 m/s để nó bay quanh mặt trời.",
+            "Tấm vải rơi": "Tạo một vật thể mềm kích thước 4m x 3m ở (5, 6) với 10 cột và 8 hàng, và đặt tên là 'vai'. Sau đó cố định các hạt ở hàng trên cùng của 'vai'.",
             "Con lắc đơn": "Tạo một con lắc đơn dài 3m treo ở điểm (5m, 8m).",
             "Hệ đòn bẩy": "Tạo một đòn bẩy dài 6m có điểm tựa ở (5m, 2m) và đặt tên thanh đòn là 'thanh'. Sau đó, tạo một hộp nặng 5kg tên 'vatnang' ở (3m, 2.5m) và một quả bóng 2kg tên 'bong' ở (7m, 2.5m).",
-            "Va chạm đàn hồi": "Tạo một quả bóng nặng 2kg tên 'b1' ở (2m, 2m) và một quả bóng khác nặng 2kg tên 'b2' ở (8m, 2m) với độ đàn hồi là 1, sau đó cho bóng 'b1' vận tốc 5m/s theo phương ngang sang phải.",
             "Hệ Ròng Rọc": "Tạo một máy Atwood ở (6, 8) với vật A 4kg và vật B 4.5kg.",
-            "Sóng Cơ": "Tạo một sợi dây tên 'day1' gồm 20 đoạn từ (1, 7) đến (11, 7). Sau đó, tạo sóng trên 'day1' với biên độ 0.5m và tần số 1.5Hz.",
             "Con lắc Newton": "Tạo một con lắc Newton với 7 quả cầu tại (6, 8), mỗi quả có bán kính 0.2m và cách nhau 0.4m."
         };
         dom.examplePromptsContainer.addEventListener('click', (e) => {
@@ -1745,12 +1746,24 @@
         });
 
         // --- Quản lý kịch bản (Lưu/Tải) ---
-        const SCENE_STORAGE_KEY = 'physics_simulator_scenes_v6_1';
+        const SCENE_STORAGE_KEY = 'physics_simulator_scenes_v7.5';
 
         function getSavedScenes() { return JSON.parse(localStorage.getItem(SCENE_STORAGE_KEY) || '{}'); }
         function saveCurrentScene() {
             const sceneName = dom.sceneNameInput.value.trim();
-            if (!sceneName) { alert("Vui lòng nhập tên kịch bản!"); return; }
+            if (!sceneName) { 
+                showConfirmationModal('Lỗi', 'Vui lòng nhập tên kịch bản!', () => {});
+                // Thay thế alert bằng modal
+                const originalActionButtonText = dom.confirmActionButton.textContent;
+                dom.confirmActionButton.textContent = 'OK';
+                dom.confirmCancelButton.classList.add('hidden');
+                dom.confirmActionButton.onclick = () => {
+                    hideConfirmationModal();
+                    dom.confirmActionButton.textContent = originalActionButtonText;
+                    dom.confirmCancelButton.classList.remove('hidden');
+                };
+                return;
+             }
             const scenes = getSavedScenes();
             scenes[sceneName] = {
                 drawings: finalizedDrawings,
@@ -1822,15 +1835,11 @@
             if (target.classList.contains('load-btn')) {
                 loadScene(sceneName);
             } else if (target.classList.contains('delete-btn')) {
-                showConfirmationModal(
-                    'Xóa kịch bản?',
-                    `Bạn có chắc muốn xóa vĩnh viễn kịch bản "${sceneName}" không?`,
-                    () => deleteScene(sceneName)
-                );
+                showConfirmationModal('Xóa kịch bản?', `Bạn có chắc muốn xóa vĩnh viễn kịch bản "${sceneName}" không?`, () => deleteScene(sceneName));
             }
         });
 
-        // --- Logic Modal xác nhận ---
+        // --- Logic Modal xác nhận & Hướng dẫn ---
         let confirmCallback = null;
         function showConfirmationModal(title, message, onConfirm) {
             dom.confirmationTitle.textContent = title;
@@ -1838,40 +1847,46 @@
             confirmCallback = onConfirm;
             dom.confirmationModal.classList.remove('hidden');
         }
-        function hideConfirmationModal() {
-            dom.confirmationModal.classList.add('hidden');
-            confirmCallback = null;
-        }
+        function hideConfirmationModal() { dom.confirmationModal.classList.add('hidden'); confirmCallback = null; }
         dom.confirmCancelButton.addEventListener('click', hideConfirmationModal);
-        dom.confirmActionButton.addEventListener('click', () => {
-            if (confirmCallback) {
-                confirmCallback();
-            }
-            hideConfirmationModal();
-        });
-
-        // --- Logic Modal Hướng dẫn ---
+        dom.confirmActionButton.addEventListener('click', () => { if (confirmCallback) confirmCallback(); hideConfirmationModal(); });
         dom.openTutorialButton.addEventListener('click', () => dom.tutorialModal.classList.remove('hidden'));
         dom.closeTutorialButton.addEventListener('click', () => dom.tutorialModal.classList.add('hidden'));
 
-        // --- Âm thanh va chạm ---
+        // --- Âm thanh & Hiệu ứng va chạm ---
         function setupAudio() {
-            collisionSynth = new Tone.MembraneSynth({
-                pitchDecay: 0.01, octaves: 6, oscillator: { type: "sine" },
-                envelope: { attack: 0.001, decay: 0.5, sustain: 0.01, release: 0.8, attackCurve: "exponential" }
-            }).toDestination();
+            if (typeof Tone !== 'undefined') {
+                try {
+                    collisionSynth = new Tone.MembraneSynth({
+                        pitchDecay: 0.01, octaves: 6, oscillator: { type: "sine" },
+                        envelope: { attack: 0.001, decay: 0.5, sustain: 0.01, release: 0.8, attackCurve: "exponential" }
+                    }).toDestination();
+                } catch(e) {
+                    console.error("Không thể khởi tạo âm thanh:", e);
+                    collisionSynth = null;
+                }
+            }
         }
         Events.on(engine, 'collisionStart', (event) => {
-            if (!collisionSynth || !isSimulationRunning) return;
             let maxIntensity = 0;
             event.pairs.forEach(pair => {
-                if (pair.collision.depth > maxIntensity) maxIntensity = pair.collision.depth;
+                if (pair.collision.depth > maxIntensity) {
+                    maxIntensity = pair.collision.depth;
+                }
             });
             if (maxIntensity > 0.5) {
-                Tone.start();
-                const volume = Math.min(-10 + maxIntensity * 2, 10);
-                const note = 60 + Math.min(maxIntensity * 5, 40);
-                collisionSynth.triggerAttackRelease(note, "8n", Tone.now(), volume);
+                // Sound
+                if (collisionSynth && isSimulationRunning) {
+                    try {
+                        Tone.start();
+                        const volume = Math.min(-10 + maxIntensity * 2, 10);
+                        const note = 60 + Math.min(maxIntensity * 5, 40);
+                        collisionSynth.triggerAttackRelease(note, "8n", Tone.now(), volume);
+                    } catch(e) {
+                        console.warn("Lỗi khi phát âm thanh va chạm:", e);
+                    }
+                }
+                // Particle effects have been removed as requested.
             }
         });
 
