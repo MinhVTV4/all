@@ -1,0 +1,1814 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Chemistry Lab v4.9 - Hiệu ứng Kết tủa Nâng cao</title>
+    
+    <!-- Tích hợp Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Tích hợp thư viện icon Lucide -->
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    
+    <!-- Tích hợp Marked.js để render Markdown -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+    <script>
+      // Cấu hình màu sắc và font cho Tailwind
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Inter', 'sans-serif'],
+            },
+            colors: {
+              'primary': '#3b82f6',
+              'primary-hover': '#2563eb',
+              'secondary': '#1e293b',
+              'accent': '#ec4899',
+            }
+          }
+        }
+      }
+    </script>
+
+    <style>
+        :root { --sidebar-width: 26rem; }
+        body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+        #lab-canvas { display: block; width: 100%; height: 100%; cursor: default; }
+        #lab-canvas.grabbing { cursor: grabbing; }
+        #lab-canvas.grab { cursor: grab; }
+        #lab-canvas.drawing-mode { cursor: crosshair; }
+        
+        .btn { transition: all 0.2s ease-in-out; }
+        .btn:hover:not(:disabled) { transform: translateY(-2px); filter: brightness(1.1); box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+        .btn:active:not(:disabled) { transform: translateY(0px); filter: brightness(0.95); }
+        
+        .draw-tool.active { background-color: #3b82f6; color: white; box-shadow: 0 0 10px rgba(59, 130, 246, 0.5); }
+        
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #1e293b; }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+        
+        .modal-backdrop { background-color: rgba(15, 23, 42, 0.8); backdrop-filter: blur(8px); }
+        .card {
+            background-color: rgba(30, 41, 59, 0.7);
+            border: 1px solid rgba(71, 85, 105, 0.5);
+            border-radius: 0.75rem;
+            backdrop-filter: blur(12px);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+        .tooltip {
+            position: absolute;
+            background-color: rgba(15, 23, 42, 0.9);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: 1px solid #475569;
+            font-size: 14px;
+            pointer-events: none;
+            white-space: pre-wrap;
+            z-index: 1000;
+            transition: opacity 0.2s;
+        }
+        .log-entry .equipment-label {
+            font-weight: 700;
+            color: #60a5fa; /* Tailwind's blue-400 */
+            cursor: pointer;
+            text-decoration: underline;
+            text-decoration-style: dotted;
+        }
+        .plan-step-item {
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            border-left: 3px solid transparent;
+        }
+        .plan-step-item:hover { background-color: #334155; }
+        .plan-step-item.selected { background-color: #3b82f6; color: white; border-left-color: #a5b4fc; }
+        .plan-step-item.completed { opacity: 0.6; text-decoration: line-through; }
+        .plan-step-item.completed:hover { background-color: #1e293b; }
+
+        @media (max-width: 1024px) {
+            #left-sidebar {
+                position: fixed; left: 0; top: 0; height: 100%;
+                transform: translateX(calc(-1 * var(--sidebar-width)));
+                transition: transform 0.3s ease-in-out; z-index: 100;
+            }
+            #left-sidebar.open { transform: translateX(0); }
+            #main-content { padding-left: 1rem; }
+            #sidebar-backdrop {
+                position: fixed; inset: 0;
+                background-color: rgba(0,0,0,0.5); z-index: 99;
+            }
+        }
+    </style>
+</head>
+<body class="bg-secondary font-sans text-slate-200 antialiased overflow-hidden">
+    
+    <div id="toast-container" class="fixed bottom-4 right-4 z-[2000] flex flex-col items-end gap-2"></div>
+
+    <!-- Nút mở Sidebar trên mobile -->
+    <button id="openSidebarButton" class="lg:hidden fixed top-4 left-4 z-50 p-2 bg-slate-700/80 rounded-md btn">
+        <i data-lucide="menu" class="w-6 h-6 text-white"></i>
+    </button>
+    <div id="sidebar-backdrop" class="hidden lg:hidden"></div>
+
+    <!-- Modal Hướng dẫn -->
+    <div id="tutorialModal" class="fixed inset-0 z-[120] flex items-center justify-center p-4 modal-backdrop hidden">
+        <div class="card w-full max-w-2xl transform transition-all" role="dialog">
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-2xl font-bold text-white flex items-center gap-2"><i data-lucide="book-open" class="text-primary"></i> Hướng dẫn sử dụng</h3>
+                    <button id="closeTutorialButton" class="p-2 rounded-full hover:bg-slate-700"><i data-lucide="x" class="w-5 h-5"></i></button>
+                </div>
+                <div class="text-slate-300 space-y-4 max-h-[70vh] overflow-y-auto pr-2">
+                    <div>
+                        <h4 class="font-semibold text-primary mb-2 flex items-center gap-2"><i data-lucide="brain-circuit" class="w-5 h-5"></i>1. Tương tác với AI</h4>
+                        <p>Nhập yêu cầu bằng ngôn ngữ tự nhiên (ví dụ: "Nghiên cứu về Đồng(II) Sunfat"). AI sẽ tra cứu và hiển thị một thẻ thông tin trên màn hình.</p>
+                    </div>
+                    <div>
+                        <h4 class="font-semibold text-primary mb-2 flex items-center gap-2"><i data-lucide="pencil-ruler" class="w-5 h-5"></i>2. Vẽ Dụng cụ</h4>
+                        <p>Sử dụng "Bộ công cụ vẽ" để vẽ các hình dạng. Sau đó, ra lệnh cho AI biến chúng thành dụng cụ, ví dụ: "biến hình chữ nhật tôi vừa vẽ thành cốc chứa 100ml nước".</p>
+                    </div>
+                    <div>
+                        <h4 class="font-semibold text-primary mb-2 flex items-center gap-2"><i data-lucide="mouse-pointer-click" class="w-5 h-5"></i>3. Tương tác trên Canvas</h4>
+                        <ul class="list-disc list-inside space-y-1 pl-2">
+                            <li><strong class="text-white">Di chuyển:</strong> Dùng chuột trái kéo/thả các dụng cụ.</li>
+                            <li><strong class="text-white">Xem thông tin:</strong> Di chuột qua một dụng cụ để xem tên và hóa chất bên trong.</li>
+                            <li><strong class="text-white">Rót chất lỏng:</strong> Kéo một cốc/ống đong và thả vào một cốc khác để bắt đầu rót.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Xác nhận -->
+    <div id="confirmationModal" class="fixed inset-0 z-[110] flex items-center justify-center p-4 modal-backdrop hidden">
+        <div class="card w-full max-w-md transform transition-all" role="dialog">
+            <div class="p-6 text-center">
+                <i data-lucide="alert-triangle" class="mx-auto h-12 w-12 text-yellow-400"></i>
+                <h3 id="confirmationTitle" class="mt-4 text-xl font-bold text-white">Xác nhận hành động</h3>
+                <p id="confirmationMessage" class="mt-2 text-slate-300">Bạn có chắc chắn muốn tiếp tục?</p>
+                <div class="mt-6 flex justify-center gap-4">
+                    <button id="confirmCancelButton" class="btn w-full bg-slate-600 text-white font-bold py-2 px-4 rounded-lg">Hủy bỏ</button>
+                    <button id="confirmActionButton" class="btn w-full bg-red-600 text-white font-bold py-2 px-4 rounded-lg">Xác nhận</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="flex h-screen">
+        <!-- KHU VỰC ĐIỀU KHIỂN - BÊN TRÁI -->
+        <aside id="left-sidebar" style="--sidebar-width: 26rem;" class="w-[var(--sidebar-width)] bg-slate-800/60 p-6 flex flex-col shadow-2xl border-r border-slate-700">
+            <div class="flex-shrink-0 mb-6 flex justify-between items-center">
+                <h1 class="text-2xl font-black text-white tracking-tighter">AI Chemistry <span class="text-primary">Lab</span></h1>
+                <span class="text-xs bg-accent/80 text-white font-bold px-2 py-1 rounded-full">v4.9</span>
+            </div>
+
+            <div class="flex flex-col flex-grow overflow-y-auto pr-2 -mr-2 space-y-6">
+                <!-- Card Nhập liệu chính -->
+                <div class="card p-4">
+                    <label for="promptInput" class="mb-2 font-semibold text-slate-300 flex items-center gap-2"><i data-lucide="terminal" class="w-5 h-5"></i> Bảng điều khiển</label>
+                    <textarea id="promptInput" rows="4" class="w-full p-3 bg-slate-900 border border-slate-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition duration-200 text-slate-200 placeholder-slate-500 resize-none" placeholder="Bắt đầu bằng cách 'nghiên cứu' một hóa chất..."></textarea>
+                    
+                    <div class="grid grid-cols-2 gap-3 mt-4">
+                        <button id="sendPromptButton" class="btn w-full bg-primary text-white font-bold py-3 px-4 rounded-lg flex items-center justify-center gap-2">
+                            <span id="buttonText">💬 Gửi Lệnh</span>
+                            <div id="buttonSpinner" class="hidden w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        </button>
+                         <button id="startReactionButton" disabled class="btn w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg flex items-center justify-center gap-2 disabled:bg-slate-600 disabled:cursor-not-allowed">
+                            <span id="reactionBtnText">💥 Phản ứng</span>
+                            <div id="reactionBtnSpinner" class="hidden w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        </button>
+                        <button id="suggestionButton" class="btn w-full bg-amber-500 text-white font-bold py-3 px-4 rounded-lg flex items-center justify-center gap-2">
+                            <i data-lucide="lightbulb" class="w-5 h-5"></i> Trợ lý
+                        </button>
+                        <button id="resetButton" class="btn w-full bg-red-600 text-white font-bold py-3 px-4 rounded-lg flex items-center justify-center gap-2">
+                            <i data-lucide="trash-2" class="w-5 h-5"></i> Dọn dẹp
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Card Công cụ vẽ -->
+                <div class="card p-4">
+                    <div class="flex justify-between items-center mb-3">
+                        <h3 class="font-semibold text-slate-300 flex items-center gap-2"><i data-lucide="pencil-ruler"></i> Bộ công cụ vẽ</h3>
+                        <button id="clearDrawingsButton" class="text-xs text-slate-400 hover:text-white transition flex items-center gap-1" title="Xóa các hình đã vẽ">
+                            <i data-lucide="eraser" class="w-4 h-4"></i> Xóa hình vẽ
+                        </button>
+                    </div>
+                     <div class="grid grid-cols-4 gap-2">
+                         <button class="draw-tool p-3 rounded-lg bg-slate-700/50 hover:bg-slate-700 flex flex-col items-center gap-1 text-xs" data-tool="freeform" title="Vẽ Tự do"><i data-lucide="pencil" class="w-5 h-5"></i><span>Tự do</span></button>
+                         <button class="draw-tool p-3 rounded-lg bg-slate-700/50 hover:bg-slate-700 flex flex-col items-center gap-1 text-xs" data-tool="box" title="Vẽ Hộp"><i data-lucide="square" class="w-5 h-5"></i><span>Hộp</span></button>
+                     </div>
+                </div>
+
+                <!-- Card Kế hoạch -->
+                <div id="plan-display" class="card p-4" style="display: none;">
+                    <h3 class="font-semibold text-slate-300 mb-3 flex items-center gap-2"><i data-lucide="list-checks" class="w-5 h-5"></i> Kế hoạch Thí nghiệm</h3>
+                    <div id="plan-steps-list" class="max-h-48 overflow-y-auto space-y-2 pr-2"></div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- KHU VỰC HIỂN THỊ CHÍNH -->
+        <main id="main-content" class="flex-1 p-6 pb-20 flex flex-col gap-6 bg-secondary/80 relative lg:pl-0">
+            <div id="canvas-container" class="flex-1 bg-slate-800/30 rounded-xl shadow-lg overflow-hidden relative border border-slate-700">
+                <canvas id="lab-canvas"></canvas>
+                <div id="tooltip" class="tooltip" style="display: none;"></div>
+            </div>
+            
+            <!-- Bảng điều khiển Phụ -->
+            <div class="absolute top-8 right-8 card p-3 flex items-center gap-2 z-10">
+                <button id="openTutorialButton" class="btn p-3 rounded-full hover:bg-slate-700 transition" title="Hướng dẫn"><i data-lucide="help-circle" class="w-6 h-6 text-slate-300"></i></button>
+                <button id="openSceneManager" class="btn p-3 rounded-full hover:bg-slate-700 transition" title="Quản lý Thí nghiệm"><i data-lucide="folder-open" class="w-6 h-6 text-slate-300"></i></button>
+            </div>
+        </main>
+        
+        <!-- Bảng điều khiển dưới -->
+        <div id="bottom-panel" class="absolute bottom-0 left-0 right-0 h-1/3 bg-slate-800/80 backdrop-blur-md p-6 flex flex-col gap-6 z-10 rounded-t-xl shadow-2xl border-t border-slate-700 transform translate-y-[calc(100%-4rem)] transition-transform duration-300 ease-in-out">
+            <button id="togglePanelButton" class="absolute -top-0 left-1/2 -translate-x-1/2 transform p-3 bg-slate-700 text-white rounded-b-lg hover:bg-slate-600 transition h-16 flex flex-col items-center justify-start pt-2">
+                <span class="text-xs mb-1">Nhật Ký & Phân Tích</span>
+                <i id="toggleIcon" data-lucide="chevron-up" class="h-6 w-6 transform transition-transform"></i>
+            </button>
+            <div class="flex-1 flex flex-col">
+                 <h2 class="text-lg font-semibold mb-2 text-slate-300 flex items-center gap-2"><i data-lucide="history" class="w-5 h-5"></i> Nhật ký Hành động</h2>
+                 <div id="action-log" class="flex-1 bg-slate-900 text-slate-300 font-mono p-4 rounded-xl shadow-inner overflow-y-auto text-sm border border-slate-700">
+                    <span class="text-slate-500">Chưa có hành động nào...</span>
+                 </div>
+            </div>
+            <div class="flex-1 flex flex-col">
+                 <h2 class="text-lg font-semibold mb-2 text-slate-300 flex items-center gap-2"><i data-lucide="bar-chart-2" class="w-5 h-5"></i> Biểu đồ Phân tích</h2>
+                 <div id="chartContainer" class="flex-1 bg-slate-900/50 p-2 rounded-xl shadow-inner border border-slate-700 flex items-center justify-center">
+                     <p class="text-slate-500">Tính năng biểu đồ sẽ được cập nhật trong tương lai.</p>
+                 </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal Trợ lý Kế hoạch (Suggestion) -->
+    <div id="suggestion-modal" class="fixed inset-0 z-[110] flex items-center justify-center p-4 modal-backdrop hidden">
+        <div class="card w-full max-w-2xl transform transition-all" role="dialog">
+            <div class="p-6 flex flex-col max-h-[80vh]">
+                <div class="flex justify-between items-center mb-4 flex-shrink-0">
+                    <h3 class="text-xl font-bold text-white flex items-center gap-2"><i data-lucide="lightbulb" class="text-primary"></i> Trợ lý Kế hoạch Thí nghiệm</h3>
+                    <button id="closeSuggestionModal" class="p-2 rounded-full hover:bg-slate-700"><i data-lucide="x" class="w-5 h-5"></i></button>
+                </div>
+                <div id="assistant-chat-history" class="flex-grow overflow-y-auto pr-2 mb-4 space-y-4">
+                    <div class="assistant-chat-message assistant">Xin chào! Tôi có thể giúp bạn lên kế hoạch cho thí nghiệm nào hôm nay? Ví dụ: "Điều chế bạc clorua" hoặc "Pha 100ml dung dịch NaOH 0.1M".</div>
+                </div>
+                <div id="assistant-controls" class="flex gap-3 flex-shrink-0">
+                    <input type="text" id="assistant-prompt-input" class="flex-grow p-3 bg-slate-900 border border-slate-600 rounded-lg focus:ring-2 focus:ring-primary text-white" placeholder="Hỏi về phản ứng, cách điều chế...">
+                    <button id="assistant-send-button" class="btn bg-primary text-white font-bold py-2 px-4 rounded-lg">Gửi</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal Quản lý Thí nghiệm -->
+    <div id="sceneManagerModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+        <div class="card w-full max-w-lg transform transition-all" role="dialog">
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xl font-bold text-white">Quản lý Thí nghiệm</h3>
+                    <button id="closeSceneManager" class="p-2 rounded-full hover:bg-slate-700"><i data-lucide="x" class="w-5 h-5"></i></button>
+                </div>
+                <div class="mb-4">
+                    <input id="sceneNameInput" type="text" class="w-full p-3 bg-slate-900 border border-slate-600 rounded-lg focus:ring-2 focus:ring-primary text-white" placeholder="Nhập tên thí nghiệm mới...">
+                    <button id="saveSceneButton" class="btn w-full mt-2 bg-green-600 text-white font-bold py-2 px-4 rounded-lg">Lưu thí nghiệm hiện tại</button>
+                </div>
+                <div id="savedScenesList" class="max-h-64 overflow-y-auto space-y-2"></div>
+            </div>
+        </div>
+    </div>
+
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js";
+        import { getAI, getGenerativeModel, GoogleAIBackend } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-ai.js";
+
+        // --- CẤU HÌNH VÀ KHAI BÁO ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyDgEH2E7W-ltp0IJwYSOjjSitB7xQhI11E",
+            authDomain: "engai-374f7.firebaseapp.com",
+            projectId: "engai-374f7",
+            storageBucket: "engai-374f7.firebasestorage.app",
+            messagingSenderId: "793685525357",
+            appId: "1:793685525357:web:bf74f624247165fd53d064"
+        };
+        
+        const dom = {
+            canvas: document.getElementById('lab-canvas'),
+            promptInput: document.getElementById('promptInput'),
+            sendPromptButton: document.getElementById('sendPromptButton'),
+            buttonText: document.getElementById('buttonText'),
+            buttonSpinner: document.getElementById('buttonSpinner'),
+            startReactionButton: document.getElementById('startReactionButton'),
+            reactionBtnText: document.getElementById('reactionBtnText'),
+            reactionBtnSpinner: document.getElementById('reactionBtnSpinner'),
+            suggestionButton: document.getElementById('suggestionButton'),
+            resetButton: document.getElementById('resetButton'),
+            actionLog: document.getElementById('action-log'),
+            planDisplay: document.getElementById('plan-display'),
+            planStepsList: document.getElementById('plan-steps-list'),
+            tooltip: document.getElementById('tooltip'),
+            openSidebarButton: document.getElementById('openSidebarButton'),
+            leftSidebar: document.getElementById('left-sidebar'),
+            sidebarBackdrop: document.getElementById('sidebar-backdrop'),
+            bottomPanel: document.getElementById('bottom-panel'),
+            togglePanelButton: document.getElementById('togglePanelButton'),
+            toggleIcon: document.getElementById('toggleIcon'),
+            suggestionModal: document.getElementById('suggestion-modal'),
+            closeSuggestionModal: document.getElementById('closeSuggestionModal'),
+            assistantChatHistory: document.getElementById('assistant-chat-history'),
+            assistantPromptInput: document.getElementById('assistant-prompt-input'),
+            assistantSendButton: document.getElementById('assistant-send-button'),
+            confirmationModal: document.getElementById('confirmationModal'),
+            confirmationTitle: document.getElementById('confirmationTitle'),
+            confirmationMessage: document.getElementById('confirmationMessage'),
+            confirmCancelButton: document.getElementById('confirmCancelButton'),
+            confirmActionButton: document.getElementById('confirmActionButton'),
+            tutorialModal: document.getElementById('tutorialModal'),
+            openTutorialButton: document.getElementById('openTutorialButton'),
+            closeTutorialButton: document.getElementById('closeTutorialButton'),
+            sceneManagerModal: document.getElementById('sceneManagerModal'),
+            openSceneManager: document.getElementById('openSceneManager'),
+            closeSceneManager: document.getElementById('closeSceneManager'),
+            saveSceneButton: document.getElementById('saveSceneButton'),
+            sceneNameInput: document.getElementById('sceneNameInput'),
+            savedScenesList: document.getElementById('savedScenesList'),
+            drawTools: document.querySelectorAll('.draw-tool'),
+            clearDrawingsButton: document.getElementById('clearDrawingsButton'),
+        };
+
+        let labState = { 
+            equipment: [], 
+            infoCards: [], 
+            knownChemicals: new Set(),
+            animations: []
+        };
+        let executorChat = null;
+        const app = initializeApp(firebaseConfig);
+        const ai = getAI(app, { backend: new GoogleAIBackend() });
+        const ctx = dom.canvas.getContext('2d');
+        
+        let activeDrawTool = null;
+        let isDrawing = false;
+        let drawStartPoint = null;
+        let currentDrawing = {};
+        let finalizedDrawings = [];
+
+        const colorNameToRGBA = {
+            'colorless': { r: 173, g: 216, b: 230, a: 0.3 }, 'white': { r: 255, g: 255, b: 255, a: 0.8 },
+            'blue': { r: 0, g: 100, b: 255, a: 0.5 }, 'green': { r: 0, g: 128, b: 0, a: 0.5 },
+            'yellow': { r: 255, g: 255, b: 0, a: 0.5 }, 'orange': { r: 255, g: 165, b: 0, a: 0.5 },
+            'red': { r: 255, g: 0, b: 0, a: 0.5 }, 'purple': { r: 128, g: 0, b: 128, a: 0.5 },
+            'pink': { r: 255, g: 192, b: 203, a: 0.5 }, 'brown': { r: 139, g: 69, b: 19, a: 0.5 },
+            'black': { r: 0, g: 0, b: 0, a: 0.5 }, 'yellow-brown': { r: 255, g: 165, b: 0, a: 0.5 },
+            'default': { r: 128, g: 128, b: 128, a: 0.5 }
+        };
+
+        const chemicalColors = { 
+            "Nước cất": { r: 173, g: 216, b: 230, a: 0.5 }
+        };
+
+        const chemicalDatabase = {
+            "Nước cất": { name: "Nước cất", formula: "H₂O", molarMass: 18.02, state: "Chất lỏng không màu" }
+        };
+
+        // --- CÁC HÀM VẼ DỤNG CỤ VÀ HIỆU ỨNG ---
+        function applyShadows(ctx, isDragged = false, isHighlighted = false) {
+            if (isHighlighted) {
+                ctx.shadowColor = 'rgba(59, 130, 246, 0.8)';
+                ctx.shadowBlur = 30;
+                ctx.shadowOffsetX = 0;
+                ctx.shadowOffsetY = 0;
+            } else {
+                ctx.shadowColor = isDragged ? 'rgba(59, 130, 246, 0.5)' : 'rgba(0, 0, 0, 0.3)';
+                ctx.shadowBlur = isDragged ? 20 : 10;
+                ctx.shadowOffsetX = isDragged ? 6 : 4;
+                ctx.shadowOffsetY = isDragged ? 6 : 4;
+            }
+        }
+
+        function clearShadows(ctx) {
+            ctx.shadowColor = 'transparent';
+            ctx.shadowBlur = 0;
+            ctx.shadowOffsetX = 0;
+            ctx.shadowOffsetY = 0;
+        }
+
+        function drawLiquid(ctx, equipment, x, y, topRadius, bottomRadius, height, liquidY, mixedColor) {
+            if (equipment.fillLevel > 0) {
+                const gradient = ctx.createLinearGradient(x - topRadius, liquidY, x + topRadius, liquidY);
+                const rgbaMatch = mixedColor.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/);
+                if (!rgbaMatch) return;
+                const [r, g, b, a] = rgbaMatch.slice(1).map(Number);
+                
+                gradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${a * 0.7})`);
+                gradient.addColorStop(0.5, `rgba(${r}, ${g}, ${b}, ${a})`);
+                gradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, ${a * 0.7})`);
+                ctx.fillStyle = gradient;
+
+                ctx.beginPath();
+                ctx.moveTo(x - bottomRadius, y + height - 15); // Start higher for curve
+                ctx.quadraticCurveTo(x, y + height + 5, x + bottomRadius, y + height - 15);
+                ctx.lineTo(x + topRadius, liquidY);
+                ctx.ellipse(x, liquidY, topRadius, Math.min(topRadius * 0.2, 12), 0, 0, Math.PI);
+                ctx.lineTo(x - topRadius, liquidY);
+                ctx.closePath();
+                ctx.fill();
+
+                ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${a * 1.2})`;
+                ctx.beginPath();
+                ctx.ellipse(x, liquidY, topRadius, Math.min(topRadius * 0.2, 12), 0, 0, 2 * Math.PI);
+                ctx.fill();
+            }
+        }
+
+        function drawBeaker(ctx, equipment) {
+            applyShadows(ctx, equipment.isDragging, equipment.isHighlighted);
+            const { position, fillLevel, mixedColor, contents, maxVolume } = equipment;
+            const x = position.x; const y = position.y;
+            const w = 120; const h = 160;
+            const rimHeight = 12; 
+            const baseRadius = w / 2;
+            const topRadius = w / 2 + 5;
+            const bottomCurveHeight = 20;
+
+            ctx.strokeStyle = 'rgba(148, 163, 184, 0.6)'; 
+            ctx.lineWidth = 2.5;
+
+            const glassGradient = ctx.createLinearGradient(x - topRadius, y, x + topRadius, y);
+            glassGradient.addColorStop(0, 'rgba(203, 213, 225, 0.1)');
+            glassGradient.addColorStop(0.5, 'rgba(226, 232, 240, 0.3)');
+            glassGradient.addColorStop(1, 'rgba(203, 213, 225, 0.1)');
+            ctx.fillStyle = glassGradient;
+
+            ctx.beginPath();
+            ctx.moveTo(x - topRadius, y + rimHeight);
+            ctx.lineTo(x - baseRadius, y + h - bottomCurveHeight);
+            ctx.quadraticCurveTo(x, y + h + bottomCurveHeight, x + baseRadius, y + h - bottomCurveHeight);
+            ctx.lineTo(x + topRadius, y + rimHeight);
+            ctx.stroke();
+            ctx.fill();
+            
+            ctx.beginPath();
+            ctx.moveTo(x + topRadius, y + rimHeight);
+            ctx.ellipse(x, y + rimHeight, topRadius, rimHeight / 2, 0, 0, Math.PI, false);
+            ctx.quadraticCurveTo(x - topRadius - 18, y + rimHeight / 2, x - topRadius - 10, y);
+            ctx.moveTo(x + topRadius, y + rimHeight);
+            ctx.quadraticCurveTo(x + topRadius + 18, y + rimHeight / 2, x + topRadius + 10, y);
+            ctx.stroke();
+            
+            ctx.beginPath();
+            ctx.ellipse(x, y + rimHeight, topRadius, rimHeight / 2, 0, Math.PI, 2 * Math.PI);
+            ctx.stroke();
+            
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(x - topRadius + 15, y + rimHeight + 10);
+            ctx.quadraticCurveTo(x - topRadius + 5, y + h/2, x - baseRadius + 15, y + h - bottomCurveHeight);
+            ctx.stroke();
+
+            clearShadows(ctx);
+
+            ctx.strokeStyle = '#64748b'; ctx.lineWidth = 1; ctx.font = '11px Inter'; ctx.textAlign = 'right'; ctx.fillStyle = '#cbd5e1';
+            const liquidMaxHeight = h - rimHeight - 15 - bottomCurveHeight;
+            for (let i = 1; i <= 4; i++) {
+                const markHeight = y + h - bottomCurveHeight - (i * liquidMaxHeight / 4);
+                const markVolume = i * maxVolume / 4;
+                ctx.beginPath();
+                ctx.moveTo(x + topRadius - 8, markHeight); ctx.lineTo(x + topRadius - 20, markHeight);
+                ctx.stroke();
+                ctx.fillText(markVolume, x + topRadius - 25, markHeight + 4);
+            }
+            
+            const solids = contents.filter(c => c.form === 'solid');
+            if (solids.length > 0) {
+                const solidHeight = 10; 
+                const solidY = y + h - solidHeight;
+                const solidColor = chemicalColors[solids[0].name] || colorNameToRGBA['default']; 
+                ctx.fillStyle = `rgba(${solidColor.r}, ${solidColor.g}, ${solidColor.b}, 1.0)`;
+                ctx.beginPath();
+                ctx.ellipse(x, solidY, baseRadius-5, rimHeight/2, 0, 0, 2 * Math.PI);
+                ctx.fill();
+            }
+
+            if (equipment.precipitate && equipment.precipitate.particles.length > 0) {
+                drawPrecipitate(ctx, equipment);
+            }
+
+            const liquidY = y + h - fillLevel;
+            drawLiquid(ctx, equipment, x, y, topRadius, baseRadius, h, liquidY, mixedColor);
+
+            ctx.fillStyle = '#e2e8f0'; ctx.font = '16px Inter'; ctx.textAlign = 'center';
+            ctx.fillText(equipment.label, x, y + h + 25 + bottomCurveHeight/2);
+        }
+
+
+        function drawBalance(ctx, equipment) {
+            applyShadows(ctx, equipment.isDragging, equipment.isHighlighted);
+            const { position, chemicalOnPlate } = equipment;
+            const x = position.x; const y = position.y;
+            const w = 150, h = 25;
+            
+            ctx.fillStyle = '#475569'; ctx.strokeStyle = '#64748b'; ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(x, y + h); ctx.lineTo(x + 5, y);
+            ctx.lineTo(x + w - 5, y); ctx.lineTo(x + w, y + h);
+            ctx.closePath(); ctx.fill(); ctx.stroke();
+            
+            ctx.fillStyle = '#334155'; ctx.strokeStyle = '#475569';
+            ctx.beginPath();
+            ctx.ellipse(x + w - 35, y, 30, 8, 0, 0, 2 * Math.PI);
+            ctx.fill(); ctx.stroke();
+            clearShadows(ctx);
+
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(x + 15, y + 5, w - 90, h - 10);
+            ctx.fillStyle = '#6ee7b7'; ctx.font = '14px "Courier New", monospace'; ctx.textAlign = 'right';
+            const massText = chemicalOnPlate ? `${chemicalOnPlate.mass.toFixed(2)}g` : '0.00g';
+            ctx.fillText(massText, x + w - 95, y + h - 8);
+            
+            if (chemicalOnPlate) {
+                const chemColor = chemicalColors[chemicalOnPlate.name] || colorNameToRGBA['default'];
+                ctx.fillStyle = `rgba(${chemColor.r}, ${chemColor.g}, ${chemColor.b}, 1)`;
+                ctx.beginPath();
+                ctx.arc(x + w - 35, y - 5, 10, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.font = '10px Inter'; ctx.textAlign = 'center'; ctx.fillStyle = '#e2e8f0';
+                ctx.fillText(chemicalOnPlate.name, x + w - 35, y - 20);
+            }
+            
+            ctx.fillStyle = '#e2e8f0'; ctx.font = '14px Inter'; ctx.textAlign = 'center';
+            ctx.fillText(equipment.label, x + w / 2, y + h + 20);
+        }
+
+        function drawGraduatedCylinder(ctx, equipment) {
+            applyShadows(ctx, equipment.isDragging, equipment.isHighlighted);
+            const { position, fillLevel, mixedColor, maxVolume } = equipment;
+            const x = position.x; const y = position.y;
+            const w = 60; const h = 200;
+            const rimHeight = 8; const baseW = 80;
+            const radius = w / 2;
+
+            ctx.fillStyle = 'rgba(71, 85, 105, 0.3)';
+            ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 2;
+
+            ctx.beginPath();
+            ctx.moveTo(x - radius, y + rimHeight);
+            ctx.lineTo(x - radius, y + h);
+            ctx.lineTo(x - baseW / 2, y + h + 15);
+            ctx.lineTo(x + baseW / 2, y + h + 15);
+            ctx.lineTo(x + radius, y + h);
+            ctx.lineTo(x + radius, y + rimHeight);
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.ellipse(x, y + rimHeight, radius, rimHeight, 0, 0, 2 * Math.PI);
+            ctx.fill();
+            ctx.stroke();
+
+            clearShadows(ctx);
+
+            const liquidY = y + h - fillLevel;
+            drawLiquid(ctx, equipment, x, y, radius, radius, h, liquidY, mixedColor);
+
+            ctx.strokeStyle = '#64748b'; ctx.lineWidth = 1; ctx.font = '10px Inter'; ctx.textAlign = 'left';
+            ctx.fillStyle = '#cbd5e1';
+            for (let i = 1; i <= 5; i++) {
+                const markHeight = y + h - (i * (h - rimHeight - 10) / 5);
+                const markVolume = i * maxVolume / 5;
+                ctx.beginPath();
+                ctx.moveTo(x - radius + 2, markHeight);
+                ctx.lineTo(x - radius + 15, markHeight);
+                ctx.stroke();
+                ctx.fillText(markVolume, x - radius - 25, markHeight + 3);
+            }
+            
+            ctx.font = '16px Inter'; ctx.textAlign = 'center';
+            ctx.fillText(equipment.label, x, y + h + 35);
+        }
+        
+        function drawInfoCard(ctx, card, index) {
+            const cardWidth = 220;
+            const cardHeight = 120;
+            const x = 20;
+            const y = 20 + index * (cardHeight + 15);
+
+            ctx.fillStyle = 'rgba(30, 41, 59, 0.8)';
+            ctx.strokeStyle = 'rgba(71, 85, 105, 0.7)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            if (ctx.roundRect) {
+                ctx.roundRect(x, y, cardWidth, cardHeight, 8);
+            } else {
+                ctx.rect(x, y, cardWidth, cardHeight);
+            }
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.fillStyle = '#e2e8f0';
+            ctx.font = 'bold 16px Inter';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            ctx.fillText(card.name, x + 15, y + 15);
+
+            ctx.fillStyle = '#94a3b8';
+            ctx.font = '14px "Courier New", monospace';
+            ctx.fillText(card.formula, x + 15, y + 40);
+
+            ctx.fillStyle = '#cbd5e1';
+            ctx.font = '12px Inter';
+            ctx.fillText(`KL Mol: ${card.molarMass} g/mol`, x + 15, y + 65);
+            ctx.fillText(`Trạng thái: ${card.state}`, x + 15, y + 85);
+        }
+
+        // --- CÁC HÀM VẼ HIỆU ỨNG ĐỘNG ---
+
+        function drawPrecipitate(ctx, equipment) {
+            if (!equipment.precipitate || !equipment.precipitate.particles) return;
+            const precipitate = equipment.precipitate;
+            const beakerBottomY = equipment.position.y + 160;
+            ctx.fillStyle = precipitate.color;
+            precipitate.particles.forEach(p => {
+                ctx.beginPath(); ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                ctx.fill();
+                // Cập nhật vị trí của hạt
+                if (p.y < beakerBottomY - p.settledLevel) {
+                    p.y += p.speed;
+                }
+            });
+        }
+        function drawStir(ctx, equipment) {
+            if (!equipment.isStirring) return;
+            const w = 120;
+            const x = equipment.position.x; const y = equipment.position.y;
+            const liquidY = y + 160 - equipment.fillLevel;
+            const angle = Date.now() / 100;
+            const stirX = x + Math.cos(angle) * (w/2 - 20);
+            const stirY = liquidY + 40 + Math.sin(angle) * 10;
+            ctx.strokeStyle = '#9ca3af'; ctx.lineWidth = 4;
+            ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(stirX, stirY);
+            ctx.stroke();
+        }
+        function drawShake(equipment) {
+            if (equipment.isShaking) {
+                const originalX = equipment.originalPosition.x;
+                const offsetX = Math.sin(Date.now() / 50) * 5;
+                equipment.position.x = originalX + offsetX;
+            } else if (equipment.originalPosition && !equipment.isDragging) {
+                equipment.position.x = equipment.originalPosition.x;
+            }
+        }
+        function drawFizzing(ctx, equipment) {
+            if (!equipment.fizzing || !equipment.fizzing.particles) return;
+            ctx.fillStyle = 'rgba(226, 232, 240, 0.7)';
+            const particles = equipment.fizzing.particles;
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                ctx.beginPath(); ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                ctx.globalAlpha = p.opacity; ctx.fill();
+                ctx.globalAlpha = 1;
+                p.y -= p.speed;
+                p.opacity -= 0.01;
+                if (p.y < p.surfaceY || p.opacity <= 0) particles.splice(i, 1);
+            }
+            if (particles.length < 100 && Math.random() > 0.5) {
+                const h = 160;
+                const liquidSurfaceY = equipment.position.y + h - equipment.fillLevel;
+                const bottomY = equipment.position.y + h;
+                const w = 110;
+                particles.push({
+                    x: equipment.position.x + (Math.random() - 0.5) * w,
+                    y: bottomY - 10 - (Math.random() * 20),
+                    radius: Math.random() * 2 + 1,
+                    speed: Math.random() * 1.5 + 0.5,
+                    opacity: 1, surfaceY: liquidSurfaceY
+                });
+            }
+        }
+
+        function drawFiltering(ctx, animation) {
+            const { dest, precipitate, liquid, progress } = animation;
+            const funnelX = dest.position.x;
+            const funnelY = dest.position.y - 30;
+
+            ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 2;
+            ctx.fillStyle = 'rgba(71, 85, 105, 0.4)';
+            ctx.beginPath();
+            ctx.moveTo(funnelX - 40, funnelY);
+            ctx.lineTo(funnelX - 10, funnelY + 40);
+            ctx.lineTo(funnelX + 10, funnelY + 40);
+            ctx.lineTo(funnelX + 40, funnelY);
+            ctx.closePath();
+            ctx.stroke(); ctx.fill();
+            ctx.beginPath();
+            ctx.moveTo(funnelX - 10, funnelY + 40);
+            ctx.lineTo(funnelX - 5, funnelY + 70);
+            ctx.lineTo(funnelX + 5, funnelY + 70);
+            ctx.lineTo(funnelX + 10, funnelY + 40);
+            ctx.closePath();
+            ctx.stroke(); ctx.fill();
+
+            ctx.fillStyle = '#e2e8f0';
+            ctx.beginPath();
+            ctx.arc(funnelX, funnelY + 5, 38, Math.PI, 2 * Math.PI);
+            ctx.closePath();
+            ctx.fill();
+            if (precipitate) {
+                const precipitateColor = chemicalColors[precipitate.name] || colorNameToRGBA['default'];
+                ctx.fillStyle = `rgba(${precipitateColor.r}, ${precipitateColor.g}, ${precipitateColor.b}, 0.9)`;
+                ctx.beginPath();
+                ctx.arc(funnelX, funnelY + 15, 30 * progress, Math.PI, 2 * Math.PI);
+                ctx.closePath();
+                ctx.fill();
+            }
+
+            if (liquid && progress < 1) {
+                const liquidColor = `rgba(${liquid.color.r}, ${liquid.color.g}, ${liquid.color.b}, 0.6)`;
+                ctx.strokeStyle = liquidColor;
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                ctx.moveTo(funnelX, funnelY + 70);
+                ctx.lineTo(funnelX, dest.position.y + 160 - dest.fillLevel);
+                ctx.stroke();
+            }
+        }
+        
+        function drawPouringStream(ctx, anim) {
+            const { source, dest, progress } = anim;
+            if (progress >= 1) return;
+
+            const sourceSpout = { x: source.position.x + 60 + 15, y: source.position.y };
+            const destRim = { x: dest.position.x, y: dest.position.y + 12 };
+            
+            const controlPoint = { x: sourceSpout.x, y: (sourceSpout.y + destRim.y) / 2 };
+
+            ctx.beginPath();
+            ctx.moveTo(sourceSpout.x, sourceSpout.y);
+            ctx.quadraticCurveTo(controlPoint.x, controlPoint.y, destRim.x, destRim.y);
+
+            ctx.strokeStyle = source.mixedColor;
+            ctx.lineWidth = Math.max(1, 6 * (1 - progress));
+            ctx.stroke();
+        }
+
+        // --- VÒNG LẶP CHÍNH VÀ CẬP NHẬT TRẠNG THÁI ---
+        
+        function updateAnimations() {
+            const now = Date.now();
+            for (let i = labState.animations.length - 1; i >= 0; i--) {
+                const anim = labState.animations[i];
+
+                if (!anim.startTime) anim.startTime = now;
+                const elapsedTime = now - anim.startTime;
+                anim.progress = Math.min(elapsedTime / anim.duration, 1);
+
+                if (anim.type === 'filtering') {
+                    const sourceFillHeight = anim.source.drawableHeight || 133;
+                    anim.source.fillLevel = sourceFillHeight * (1 - anim.progress);
+
+                    const destFillHeight = anim.dest.drawableHeight || 133;
+                    const finalVolume = anim.dest.contents.reduce((sum, c) => sum + (c.volume || 0), 0);
+                    anim.dest.fillLevel = (finalVolume / anim.dest.maxVolume) * destFillHeight * anim.progress;
+
+                    if (anim.progress >= 1) {
+                        anim.source.contents = [];
+                        anim.source.fillLevel = 0;
+                        recalculateSolutionProperties(anim.dest);
+                        labState.animations.splice(i, 1);
+                    }
+                } else if (anim.type === 'pouring') {
+                    const amountToTransfer = anim.quantity * anim.progress;
+                    const sourceTotalVolume = anim.initialSourceLiquids.reduce((sum, c) => sum + c.volume, 0);
+                    
+                    let remainingVolumeInSource = sourceTotalVolume - amountToTransfer;
+                    anim.source.fillLevel = (remainingVolumeInSource / anim.source.maxVolume) * anim.source.drawableHeight;
+
+                    let newVolumeInDest = anim.initialDestVolume + amountToTransfer;
+                    anim.dest.fillLevel = (newVolumeInDest / anim.dest.maxVolume) * anim.dest.drawableHeight;
+
+                    if (anim.progress >= 1) {
+                        const chemicalsToTransfer = [];
+                        const proportion = anim.quantity / sourceTotalVolume;
+                        
+                        anim.initialSourceLiquids.forEach(liquid => {
+                            const amount = liquid.volume * proportion;
+                            chemicalsToTransfer.push({ ...liquid, volume: amount });
+                        });
+
+                        anim.source.contents = anim.source.contents.filter(c => !anim.initialSourceLiquids.some(l => l.name === c.name));
+                        anim.initialSourceLiquids.forEach(liquid => {
+                            liquid.volume *= (1 - proportion);
+                            if(liquid.volume > 0.01) anim.source.contents.push(liquid);
+                        });
+                        
+                        anim.dest.contents.push(...chemicalsToTransfer);
+                        
+                        recalculateSolutionProperties(anim.source);
+                        recalculateSolutionProperties(anim.dest);
+                        labState.animations.splice(i, 1);
+                    }
+                }
+            }
+        }
+
+        function drawLab() {
+            const container = dom.canvas.parentElement;
+            if (dom.canvas.width !== container.clientWidth || dom.canvas.height !== container.clientHeight) {
+                dom.canvas.width = container.clientWidth;
+                dom.canvas.height = container.clientHeight;
+            }
+            
+            ctx.clearRect(0, 0, dom.canvas.width, dom.canvas.height);
+            
+            updateAnimations();
+            updateButtonStates();
+
+            ctx.save();
+            const allDrawings = [...finalizedDrawings, ...(isDrawing ? [currentDrawing] : [])];
+            allDrawings.forEach((drawing) => {
+                if (drawing && drawing.type) {
+                    ctx.strokeStyle = '#34d399';
+                    ctx.lineWidth = 2;
+                    ctx.setLineDash([5, 5]);
+                    ctx.beginPath();
+                    switch (drawing.type) {
+                        case 'freeform':
+                            if (drawing.path && drawing.path.length > 1) {
+                                ctx.moveTo(drawing.path[0].x, drawing.path[0].y);
+                                for (let i = 1; i < drawing.path.length; i++) ctx.lineTo(drawing.path[i].x, drawing.path[i].y);
+                            }
+                            break;
+                        case 'box': ctx.rect(drawing.x, drawing.y, drawing.w, drawing.h); break;
+                    }
+                    ctx.stroke();
+                }
+            });
+            ctx.restore();
+
+            labState.equipment.forEach(eq => {
+                drawShake(eq);
+                if (eq.type === 'beaker') {
+                    drawBeaker(ctx, eq);
+                    drawFizzing(ctx, eq);
+                } else if (eq.type === 'balance') {
+                    drawBalance(ctx, eq);
+                } else if (eq.type === 'graduatedCylinder') {
+                    drawGraduatedCylinder(ctx, eq);
+                    drawFizzing(ctx, eq);
+                }
+            });
+            labState.animations.forEach(anim => {
+                if (anim.type === 'filtering') {
+                    drawFiltering(ctx, anim);
+                } else if (anim.type === 'pouring') {
+                    drawPouringStream(ctx, anim);
+                }
+            });
+
+            labState.infoCards.forEach((card, index) => {
+                drawInfoCard(ctx, card, index);
+            });
+
+            requestAnimationFrame(drawLab);
+        }
+
+        // --- UI VÀ TƯƠNG TÁC NGƯỜI DÙNG ---
+        function renderAndActivatePlan(steps) {
+            dom.planStepsList.innerHTML = '';
+            steps.forEach((step, index) => {
+                const li = document.createElement('li');
+                li.id = `plan-step-${index}`;
+                li.className = 'plan-step-item';
+                li.innerHTML = `<span class="font-semibold text-primary">Bước ${index + 1}:</span> ${step.description}`;
+                li.dataset.prompt = step.prompt;
+                li.onclick = () => {
+                    dom.promptInput.value = step.prompt;
+                    dom.promptInput.focus();
+                    document.querySelectorAll('.plan-step-item').forEach(item => item.classList.remove('selected'));
+                    li.classList.add('selected');
+                };
+                dom.planStepsList.appendChild(li);
+            });
+            dom.planDisplay.style.display = 'block';
+        }
+
+        function showToast(message, type) {
+            const icons = {
+                'user-request': '👤', 'ai-response': '🤖',
+                'function-call': '⚙️', 'function-result': '✔️',
+                'system': '🔧', 'error': '❌'
+            };
+            const toastContainer = document.getElementById('toast-container');
+            if (!toastContainer) return;
+            const toast = document.createElement('div');
+            toast.className = `toast ${type} p-4 rounded-lg shadow-lg text-white font-semibold flex items-center gap-3`;
+            const textContent = message.replace(/<[^>]*>/g, '');
+            toast.innerHTML = `<span class="text-xl">${icons[type] || '🔔'}</span> <span>${textContent}</span>`;
+            
+            const typeColors = {
+                'user-request': 'bg-blue-500', 'ai-response': 'bg-green-500',
+                'function-call': 'bg-purple-500', 'function-result': 'bg-orange-500',
+                'system': 'bg-slate-500', 'error': 'bg-red-500'
+            };
+            toast.classList.add(typeColors[type] || 'bg-gray-500');
+
+            toastContainer.appendChild(toast);
+            setTimeout(() => {
+                toast.style.transition = 'opacity 0.5s ease';
+                toast.style.opacity = '0';
+                setTimeout(() => toast.remove(), 500);
+            }, 4500);
+        }
+
+        function logAction(type, content) {
+            if (dom.actionLog.innerHTML.includes("Chưa có hành động nào")) { dom.actionLog.innerHTML = ""; }
+            const icons = {
+                'user-request': '👤', 'ai-response': '🤖',
+                'function-call': '⚙️', 'function-result': '✔️',
+                'system': '🔧', 'error': '❌'
+            };
+            let formattedContent = content;
+            labState.equipment.forEach(eq => {
+                const regex = new RegExp(`'${eq.label}'|"${eq.label}"`, 'g');
+                formattedContent = formattedContent.replace(regex, `<span class="equipment-label" data-label="${eq.label}">${eq.label}</span>`);
+            });
+
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type} flex items-start gap-2 mb-2`;
+            entry.innerHTML = `<span class="icon mt-1" title="${type}">${icons[type] || '•'}</span><div>${formattedContent}</div>`;
+            dom.actionLog.appendChild(entry);
+            dom.actionLog.scrollTop = dom.actionLog.scrollHeight;
+            if (type !== 'function-call' && type !== 'function-result') {
+                showToast(content, type);
+            }
+        }
+
+        let draggedItem = null;
+        let dragOffsetX = 0;
+        let dragOffsetY = 0;
+
+        function getEquipmentAtPos(mouseX, mouseY) {
+            for (let i = labState.equipment.length - 1; i >= 0; i--) {
+                const eq = labState.equipment[i];
+                const { x, y } = eq.position;
+                let w, h;
+                if (eq.type === 'beaker') { w = 120; h = 160; }
+                else if (eq.type === 'balance') { w = 150; h = 45; }
+                else if (eq.type === 'graduatedCylinder') { w = 80; h = 215; }
+                
+                if (w && h && mouseX > x - w/2 && mouseX < x + w/2 && mouseY > y && mouseY < y + h + 40) {
+                    return eq;
+                }
+            }
+            return null;
+        }
+
+        dom.canvas.addEventListener('mousedown', (e) => {
+            if (activeDrawTool) { startDraw(e); return; }
+
+            const rect = dom.canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            
+            const item = getEquipmentAtPos(mouseX, mouseY);
+            if (item) {
+                draggedItem = item;
+                draggedItem.isDragging = true;
+                dragOffsetX = mouseX - item.position.x;
+                dragOffsetY = mouseY - item.position.y;
+                dom.canvas.classList.add('grabbing');
+            }
+        });
+
+        window.addEventListener('mouseup', () => {
+            if (isDrawing) { endDraw(); return; }
+
+            if (draggedItem) {
+                draggedItem.isDragging = false;
+                
+                const rect = dom.canvas.getBoundingClientRect();
+                const mouseX = event.clientX - rect.left;
+                const mouseY = event.clientY - rect.top;
+                const targetItem = getEquipmentAtPos(mouseX, mouseY);
+                
+                if (targetItem && targetItem !== draggedItem && 
+                    (draggedItem.type === 'beaker' || draggedItem.type === 'graduatedCylinder') &&
+                    targetItem.type === 'beaker') {
+                        
+                    const sourceTotalVolume = draggedItem.contents.filter(c => c.form === 'liquid').reduce((sum, c) => sum + c.volume, 0);
+                    if (sourceTotalVolume > 0) {
+                        availableFunctions.transferLiquid({
+                            sourceId: draggedItem.label,
+                            destinationId: targetItem.label,
+                            quantity: sourceTotalVolume 
+                        });
+                    }
+                }
+
+                draggedItem.originalPosition = { ...draggedItem.position };
+            }
+            draggedItem = null;
+            dom.canvas.classList.remove('grabbing');
+            dom.canvas.classList.remove('grab');
+        });
+
+        dom.canvas.addEventListener('mousemove', (e) => {
+            if (isDrawing) { draw(e); return; }
+
+            const rect = dom.canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            if (draggedItem) {
+                draggedItem.position.x = mouseX - dragOffsetX;
+                draggedItem.position.y = mouseY - dragOffsetY;
+            } else {
+                const item = getEquipmentAtPos(mouseX, mouseY);
+                dom.canvas.classList.toggle('grab', !!item);
+                
+                if (item) {
+                    const liquids = item.contents.filter(c => c.form === 'liquid').map(c => `${c.name} (${(c.volume || 0).toFixed(1)}ml)`).join('\n');
+                    const solids = item.contents.filter(c => c.form === 'solid').map(c => `${c.name} (${c.quantity}g)`).join('\n');
+                    let content = `<strong>${item.label}</strong> (${item.type})`;
+                    if (liquids) content += `\n- ${liquids}`;
+                    if (solids) content += `\n- ${solids}`;
+                    
+                    dom.tooltip.innerHTML = content;
+                    dom.tooltip.style.left = `${mouseX + 15}px`;
+                    dom.tooltip.style.top = `${mouseY + 15}px`;
+                    dom.tooltip.style.display = 'block';
+                } else {
+                    dom.tooltip.style.display = 'none';
+                }
+            }
+        });
+        
+        dom.canvas.addEventListener('mouseout', () => {
+             if (draggedItem) {
+                draggedItem.isDragging = false;
+                draggedItem.originalPosition = { ...draggedItem.position };
+            }
+            draggedItem = null;
+            dom.canvas.classList.remove('grabbing');
+            dom.canvas.classList.remove('grab');
+        });
+
+        function updateButtonStates() {
+            const reactionReady = labState.equipment.some(e => e.type === 'beaker' && e.contents.filter(c => c.form === 'liquid' || c.form === 'solid').length > 1);
+            dom.startReactionButton.disabled = !reactionReady;
+        }
+        
+        // --- LOGIC CỐT LÕI VÀ CÁC HÀM CÔNG CỤ CHO AI ---
+        function recalculateSolutionProperties(equipment) {
+            if (!equipment || !equipment.contents) return;
+
+            const liquids = equipment.contents.filter(c => c.form === 'liquid');
+            const totalVolume = liquids.reduce((sum, c) => sum + (c.volume || 0), 0);
+
+            if (totalVolume > 0) {
+                let r = 0, g = 0, b = 0;
+                liquids.forEach(chem => {
+                    if (chem.color && typeof chem.color === 'object' && chem.volume > 0) {
+                        r += (chem.color.r || 0) * chem.volume;
+                        g += (chem.color.g || 0) * chem.volume;
+                        b += (chem.color.b || 0) * chem.volume;
+                    }
+                });
+                equipment.mixedColor = `rgba(${Math.round(r/totalVolume)}, ${Math.round(g/totalVolume)}, ${Math.round(b/totalVolume)}, 0.6)`;
+            } else {
+                equipment.mixedColor = 'rgba(0,0,0,0)';
+            }
+
+            const fillHeight = equipment.drawableHeight || 133;
+            equipment.fillLevel = (totalVolume / equipment.maxVolume) * fillHeight;
+        }
+
+        const availableFunctions = {
+            createEquipmentFromDrawings: ({ objects }) => {
+                objects = objects || [];
+                finalizedDrawings.forEach((drawing, index) => {
+                    const objInfo = objects.find(o => o.drawingIndex === index);
+                    if (!objInfo) return;
+
+                    const id = `eq-${Date.now()}-${index}`;
+                    let centerX, centerY;
+                    if (drawing.type === 'box') {
+                        centerX = drawing.x + drawing.w / 2;
+                        centerY = drawing.y + drawing.h / 2;
+                    } else if (drawing.type === 'freeform') {
+                        let sumX = 0, sumY = 0;
+                        drawing.path.forEach(p => { sumX += p.x; sumY += p.y; });
+                        centerX = sumX / drawing.path.length;
+                        centerY = sumY / drawing.path.length;
+                    } else {
+                        return;
+                    }
+
+                    const newEquipment = {
+                        id, type: objInfo.type || 'beaker', label: objInfo.label,
+                        position: { x: centerX, y: centerY },
+                        originalPosition: { x: centerX, y: centerY },
+                        contents: [], mixedColor: 'rgba(0,0,0,0)', fillLevel: 0,
+                        maxVolume: objInfo.capacity || 250,
+                        isStirring: false, isShaking: false, precipitate: null, fizzing: null,
+                        isDragging: false, isHighlighted: false,
+                        drawableHeight: 133
+                    };
+                    labState.equipment.push(newEquipment);
+                });
+                clearAllDrawings();
+                return { success: true, message: `Đã tạo ${objects.length} dụng cụ từ hình vẽ.` };
+            },
+
+            addChemical: async ({ equipmentId, name, form, quantity, unit, concentration }) => {
+                const equipment = labState.equipment.find(e => e.id === equipmentId || e.label === equipmentId);
+                if (!equipment) return { success: false, message: `Không tìm thấy dụng cụ '${equipmentId}'.` };
+                
+                let chemicalKeyForColor = Object.keys(chemicalColors).find(k => k.toLowerCase() === name.toLowerCase());
+                if (!chemicalKeyForColor) {
+                    const researchResult = await availableFunctions.researchChemical({ chemicalName: name });
+                    if (!researchResult.success) {
+                        return { success: false, message: `Không thể tìm thấy thông tin cho hóa chất mới: ${name}` };
+                    }
+                    chemicalKeyForColor = researchResult.chemicalInfo.formula;
+                }
+                const newChemicalColor = chemicalColors[chemicalKeyForColor] || colorNameToRGBA['default'];
+
+                if (form === 'liquid') {
+                    const currentTotalVolume = equipment.contents.reduce((sum, chem) => sum + (chem.volume || 0), 0);
+                    if (currentTotalVolume + quantity > equipment.maxVolume) { 
+                        return { success: false, message: `Dụng cụ sẽ bị tràn.` }; 
+                    }
+                    equipment.contents.push({ name, volume: quantity, color: newChemicalColor, form: 'liquid', concentration });
+                    recalculateSolutionProperties(equipment);
+                    return { success: true, message: `Đã thêm ${quantity}ml ${name} ${concentration || ''} vào ${equipment.label}.` };
+                } else if (form === 'solid') {
+                    equipment.contents.push({ name, quantity, unit, form: 'solid', color: newChemicalColor });
+                    recalculateSolutionProperties(equipment);
+                    return { success: true, message: `Đã thêm ${quantity}${unit} ${name} vào ${equipment.label}.` };
+                }
+                return { success: false, message: "Dạng hóa chất không được hỗ trợ." };
+            },
+            changeSolutionColor: ({ equipmentId, newColorName }) => {
+                const equipment = labState.equipment.find(e => e.id === equipmentId || e.label === equipmentId);
+                if (!equipment) return { success: false, message: `Không tìm thấy dụng cụ '${equipmentId}'.` };
+                const newColor = colorNameToRGBA[newColorName.toLowerCase()] || colorNameToRGBA['default'];
+                
+                const totalVolume = equipment.contents.reduce((sum, c) => sum + (c.volume || 0), 0);
+                equipment.contents = [{
+                    name: "Sản phẩm phản ứng",
+                    volume: totalVolume,
+                    color: newColor,
+                    form: 'liquid'
+                }];
+                recalculateSolutionProperties(equipment);
+                return { success: true, message: `Dung dịch trong ${equipment.label} đã đổi thành màu ${newColorName}.` };
+            },
+            displayChemicalInfo: ({ chemicalInfo }) => {
+                if (!labState.infoCards.some(card => card.formula === chemicalInfo.formula)) {
+                    labState.infoCards.push(chemicalInfo);
+                }
+                return { success: true, message: `Đã hiển thị thông tin cho ${chemicalInfo.name}.` };
+            },
+            filter_precipitate: ({ sourceId, destinationId }) => {
+                const source = labState.equipment.find(e => e.label === sourceId);
+                const dest = labState.equipment.find(e => e.label === destinationId);
+
+                if (!source || source.type !== 'beaker') return { success: false, message: `Không tìm thấy cốc nguồn '${sourceId}'.` };
+                if (!dest || dest.type !== 'beaker') return { success: false, message: `Không tìm thấy cốc đích '${destinationId}'.` };
+
+                const precipitate = source.contents.find(c => c.isPrecipitate);
+                if (!precipitate) return { success: false, message: `Không tìm thấy kết tủa trong '${sourceId}'.` };
+
+                const liquid = source.contents.find(c => c.form === 'liquid');
+                if (!liquid) return { success: false, message: `Không có dung dịch để lọc trong '${sourceId}'.` };
+
+                labState.animations.push({
+                    type: 'filtering',
+                    source: source,
+                    dest: dest,
+                    precipitate: precipitate,
+                    liquid: liquid,
+                    progress: 0,
+                    duration: 5000
+                });
+
+                dest.contents.push(liquid);
+                source.contents = source.contents.filter(c => !c.isPrecipitate);
+                
+                recalculateSolutionProperties(source);
+                recalculateSolutionProperties(dest);
+
+                return { success: true, message: `Bắt đầu lọc kết tủa từ '${sourceId}' sang '${destinationId}'.` };
+            },
+            finalizeExperiment: ({ steps }) => {
+                renderAndActivatePlan(steps);
+                closeSuggestionModal();
+                return { success: true, message: "Kế hoạch đã được chuyển ra màn hình chính. Hãy thực hiện từng bước." };
+            },
+            getNewEquipment: ({ type, label, capacity }) => {
+                const id = `eq-${Date.now()}`;
+                const existingCount = labState.equipment.length;
+                const position = { x: 150 + existingCount * 220, y: 200 };
+                
+                const newEquipment = {
+                    id, type, label, position,
+                    originalPosition: { ...position },
+                    contents: [], mixedColor: 'rgba(0,0,0,0)', fillLevel: 0,
+                    maxVolume: capacity || 250,
+                    isStirring: false, isShaking: false, precipitate: null, fizzing: null,
+                    isDragging: false, isHighlighted: false
+                };
+
+                if (type === 'beaker') newEquipment.drawableHeight = 133;
+                else if (type === 'graduatedCylinder') newEquipment.drawableHeight = 180;
+                
+                labState.equipment.push(newEquipment);
+                return { success: true, message: `Đã lấy ra một ${type} mới có nhãn '${label}'.`, equipmentId: id, label: label };
+            },
+            measure_liquid: async ({ sourceId, destinationId, chemical_name, quantity_ml }) => {
+                const source = labState.equipment.find(e => e.label === sourceId);
+                const cylinder = labState.equipment.find(e => e.label === destinationId);
+                
+                if (!source) return { success: false, message: `Không tìm thấy dụng cụ nguồn '${sourceId}'.` };
+                if (!cylinder || cylinder.type !== 'graduatedCylinder') return { success: false, message: `Dụng cụ đích '${destinationId}' không phải là ống đong.` };
+
+                const chemicalInSource = source.contents.find(c => c.name === chemical_name && c.form === 'liquid');
+                if (!chemicalInSource || chemicalInSource.volume < quantity_ml) {
+                    return { success: false, message: `Không đủ ${quantity_ml}ml ${chemical_name} trong ${sourceId}.` };
+                }
+                
+                chemicalInSource.volume -= quantity_ml;
+                
+                cylinder.contents.push({ name: chemical_name, volume: quantity_ml, color: chemicalColors[chemical_name], form: 'liquid' });
+
+                recalculateSolutionProperties(source);
+                recalculateSolutionProperties(cylinder);
+
+                return { success: true, message: `Đã đong ${quantity_ml}ml ${chemical_name} từ ${sourceId} vào ${destinationId}.` };
+            },
+            researchChemical: async ({ chemicalName }) => {
+                const keyName = chemicalName.toLowerCase();
+                const existingChemical = Object.keys(chemicalDatabase).find(k => k.toLowerCase() === keyName);
+                if (existingChemical) {
+                    labState.knownChemicals.add(existingChemical);
+                    availableFunctions.displayChemicalInfo({ chemicalInfo: chemicalDatabase[existingChemical] });
+                    return { success: true, chemicalInfo: chemicalDatabase[existingChemical] };
+                }
+                logAction('system', `<strong>APP:</strong> Hóa chất '${chemicalName}' không có trong dữ liệu. Đang tìm kiếm...`);
+                try {
+                    const lookupModel = getGenerativeModel(ai, { model: "gemini-2.0-flash" });
+                    const prompt = `Cung cấp thông tin cho hóa chất "${chemicalName}" theo định dạng JSON sau: {"name": "Tên tiếng Việt", "formula": "Công thức hóa học", "molarMass": khối lượng mol (số), "state": "Trạng thái vật lý", "colorName": "tên màu sắc của dung dịch bằng tiếng Anh (ví dụ: 'blue', 'yellow', 'colorless')"}. Nếu không tìm thấy, trả về {"success": false}.`;
+                    const result = await lookupModel.generateContent(prompt);
+                    const textResponse = result.response.text();
+                    const jsonString = textResponse.match(/{.*}/s)[0];
+                    const chemicalInfo = JSON.parse(jsonString);
+                    if (chemicalInfo.success === false || !chemicalInfo.formula) {
+                        throw new Error(`Không tìm thấy thông tin cho ${chemicalName}.`);
+                    }
+                    const newKey = chemicalInfo.formula;
+                    chemicalDatabase[newKey] = chemicalInfo;
+                    labState.knownChemicals.add(newKey);
+                    if (!chemicalColors[newKey]) {
+                         const colorName = chemicalInfo.colorName ? chemicalInfo.colorName.toLowerCase() : 'default';
+                         chemicalColors[newKey] = colorNameToRGBA[colorName] || colorNameToRGBA['default'];
+                    }
+                    logAction('system', `<strong>APP:</strong> Đã tìm thấy và thêm '${chemicalInfo.name}' vào dữ liệu.`);
+                    availableFunctions.displayChemicalInfo({ chemicalInfo });
+                    return { success: true, chemicalInfo: chemicalInfo };
+                } catch (e) {
+                    console.error("Lỗi khi tìm kiếm hóa chất:", e);
+                    logAction('error', `<strong>Lỗi:</strong> Không thể tìm thấy hoặc xử lý thông tin cho ${chemicalName}.`);
+                    return { success: false, message: `Không tìm thấy thông tin cho ${chemicalName}.` };
+                }
+            },
+            resetLab: () => {
+                labState = { equipment: [], infoCards: [], knownChemicals: new Set(), animations: [] };
+                clearAllDrawings();
+                dom.actionLog.innerHTML = "<span class='text-slate-500'>Chưa có hành động nào...</span>";
+                dom.planDisplay.style.display = 'none';
+                dom.planStepsList.innerHTML = '';
+                executorChat = null; 
+                return { success: true, message: "Phòng thí nghiệm đã được dọn dẹp." };
+            },
+            shake: async ({ equipmentId, duration_seconds }) => {
+                const equipment = labState.equipment.find(e => e.id === equipmentId || e.label === equipmentId);
+                if (!equipment) return { success: false, message: `Không tìm thấy dụng cụ '${equipmentId}'.` };
+                equipment.isShaking = true;
+                await new Promise(resolve => setTimeout(resolve, duration_seconds * 1000));
+                equipment.isShaking = false;
+                return { success: true, message: `Đã lắc đều dung dịch trong '${equipment.label}'.` };
+            },
+            // NÂNG CẤP: Hiệu ứng kết tủa được làm lại hoàn toàn
+            showReactionEffect: async ({ effect, productName, equipmentId }) => {
+                const equipment = labState.equipment.find(e => e.id === equipmentId || e.label === equipmentId);
+                if (!equipment) return { success: false, message: `Không tìm thấy dụng cụ '${equipmentId}'.` };
+                if (effect === 'precipitate') {
+                    const color = productName ? (chemicalColors[productName] || colorNameToRGBA['default']) : colorNameToRGBA['default'];
+                    
+                    equipment.precipitate = { particles: [], color: `rgba(${color.r}, ${color.g}, ${color.b}, 0.9)` };
+                    // Tạo các hạt kết tủa
+                    for (let i = 0; i < 200; i++) {
+                        equipment.precipitate.particles.push({
+                            x: equipment.position.x + (Math.random() - 0.5) * 100,
+                            y: equipment.position.y + 20 + Math.random() * 100,
+                            radius: Math.random() * 1.5 + 0.5,
+                            speed: Math.random() * 0.5 + 0.2,
+                            settledLevel: Math.random() * 20
+                        });
+                    }
+                    // Hiệu ứng sẽ diễn ra trong vòng lặp vẽ, không cần chờ ở đây
+                } else if (effect === 'fizzing') {
+                    equipment.fizzing = { particles: [] };
+                    setTimeout(() => {
+                        equipment.fizzing = null;
+                    }, 4000);
+                }
+                return { success: true, message: `Hiệu ứng ${effect} đã được hiển thị.` };
+            },
+            stir: async ({ equipmentId, duration_seconds }) => {
+                const equipment = labState.equipment.find(e => e.id === equipmentId || e.label === equipmentId);
+                if (!equipment) return { success: false, message: `Không tìm thấy dụng cụ '${equipmentId}'.` };
+
+                const solidIndex = equipment.contents.findIndex(c => c.form === 'solid');
+                const liquids = equipment.contents.filter(c => c.form === 'liquid');
+
+                if (solidIndex === -1 || liquids.length === 0) {
+                    equipment.isStirring = true;
+                    await new Promise(resolve => setTimeout(resolve, duration_seconds * 1000));
+                    equipment.isStirring = false;
+                    return { success: true, message: `Đã khuấy trong '${equipment.label}', không có gì thay đổi.` };
+                }
+
+                const solid = equipment.contents[solidIndex];
+                const solvent = liquids.reduce((max, liq) => liq.volume > max.volume ? liq : max, liquids[0]);
+
+                equipment.isStirring = true;
+                await new Promise(resolve => setTimeout(resolve, duration_seconds * 1000));
+                equipment.isStirring = false;
+
+                equipment.contents.splice(solidIndex, 1);
+
+                solvent.volume += solid.quantity; 
+                solvent.name = `Dung dịch ${solid.name}`;
+                solvent.color = solid.color; 
+
+                recalculateSolutionProperties(equipment);
+                
+                return { success: true, message: `Đã khuấy và hòa tan ${solid.name} trong '${equipment.label}'.` };
+            },
+            transferLiquid: ({ sourceId, destinationId, quantity }) => {
+                const source = labState.equipment.find(e => e.id === sourceId || e.label === sourceId);
+                const dest = labState.equipment.find(e => e.id === destinationId || e.label === destinationId);
+                if (!source || !dest) return { success: false, message: "Không tìm thấy dụng cụ nguồn hoặc đích." };
+                
+                const sourceLiquids = source.contents.filter(c => c.form === 'liquid');
+                const sourceTotalVolume = sourceLiquids.reduce((sum, c) => sum + c.volume, 0);
+
+                if (quantity > sourceTotalVolume) return { success: false, message: `Không đủ ${quantity}ml chất lỏng trong ${source.label} để chuyển.` };
+                
+                const initialDestVolume = dest.contents.filter(c => c.form === 'liquid').reduce((sum, c) => sum + c.volume, 0);
+
+                labState.animations.push({
+                    type: 'pouring',
+                    source, dest, quantity,
+                    progress: 0, duration: 2000,
+                    initialSourceLiquids: JSON.parse(JSON.stringify(sourceLiquids)),
+                    initialDestVolume: initialDestVolume
+                });
+
+                return { success: true, message: `Bắt đầu rót ${quantity}ml từ ${source.label} sang ${dest.label}.` };
+            },
+            transferSolid: ({ sourceId, destinationId }) => {
+                const sourceEquipment = labState.equipment.find(e => e.id === sourceId || e.label === sourceId);
+                const destinationEquipment = labState.equipment.find(e => e.id === destinationId || e.label === destinationId);
+                if (!sourceEquipment) return { success: false, message: `Không tìm thấy dụng cụ nguồn '${sourceId}'.` };
+                if (!destinationEquipment) return { success: false, message: `Không tìm thấy dụng cụ đích '${destinationId}'.` };
+                if (sourceEquipment.type !== 'balance') {
+                    return { success: false, message: `Không thể chuyển chất rắn từ '${sourceEquipment.label}' vì đó không phải là cân.` };
+                }
+                if (destinationEquipment.type !== 'beaker' && destinationEquipment.type !== 'graduatedCylinder') {
+                    return { success: false, message: `Không thể chuyển chất rắn vào '${destinationEquipment.label}' vì đó không phải là dụng cụ chứa.` };
+                }
+                if (!sourceEquipment.chemicalOnPlate) return { success: false, message: `Không có chất rắn nào trên cân '${sourceEquipment.label}'.` };
+                const { name, mass } = sourceEquipment.chemicalOnPlate;
+                destinationEquipment.contents.push({ name, quantity: mass, unit: 'g', form: 'solid', color: chemicalColors[name] || colorNameToRGBA['default'] });
+                sourceEquipment.chemicalOnPlate = null;
+                recalculateSolutionProperties(destinationEquipment);
+                return { success: true, message: `Đã chuyển ${mass}g ${name} từ ${sourceEquipment.label} vào ${destinationEquipment.label}.` };
+            },
+            weighSolid: async ({ equipmentId, chemical, mass }) => {
+                const balance = labState.equipment.find(e => e.id === equipmentId || e.label === equipmentId);
+                if (!balance || balance.type !== 'balance') return { success: false, message: `Không tìm thấy cân '${equipmentId}'.` };
+                balance.chemicalOnPlate = { name: chemical, mass: 0 };
+                await new Promise(resolve => {
+                    const duration = 1500; const startTime = Date.now();
+                    function loop() {
+                        const progress = Math.min((Date.now() - startTime) / duration, 1);
+                        balance.chemicalOnPlate.mass = mass * progress;
+                        if (progress < 1) requestAnimationFrame(loop); else resolve();
+                    }
+                    requestAnimationFrame(loop);
+                });
+                balance.chemicalOnPlate.mass = mass;
+                return { success: true, message: `Đã cân ${mass}g ${chemical} trên ${balance.label}.` };
+            },
+        };
+
+        // --- AI MODEL DEFINITIONS AND API CALLERS ---
+        const executorModel = getGenerativeModel(ai, {
+            model: "gemini-2.0-flash",
+            tools: [{ functionDeclarations: [
+                { name: "researchChemical", description: "Tra cứu thông tin cơ bản về một hóa chất và hiển thị nó.", parameters: { type: "object", properties: { chemicalName: { type: "string" } }, required: ["chemicalName"] } },
+                { name: "displayChemicalInfo", description: "Chỉ dùng để hiển thị một thẻ thông tin về hóa chất đã có.", parameters: { type: "object", properties: { chemicalInfo: { type: "object" } }, required: ["chemicalInfo"] } },
+                { name: "getNewEquipment", description: "Lấy một dụng cụ mới.", parameters: { type: "object", properties: { type: { type: "string", enum: ["beaker", "balance", "graduatedCylinder"] }, label: { type: "string" }, capacity: { type: "number" } }, required: ["type", "label"] } },
+                { name: "weighSolid", description: "Cân một khối lượng chất rắn trên một cái cân.", parameters: { type: "object", properties: { equipmentId: { type: "string" }, chemical: { type: "string" }, mass: { type: "number" } }, required: ["equipmentId", "chemical", "mass"] } },
+                { name: "transferSolid", description: "Chuyển chất rắn từ cân sang dụng cụ khác.", parameters: { type: "object", properties: { sourceId: { type: "string" }, destinationId: { type: "string" } }, required: ["sourceId", "destinationId"] } },
+                { name: "addChemical", description: "Thêm một hóa chất vào một dụng cụ.", parameters: { type: "object", properties: { equipmentId: { type: "string" }, name: { type: "string" }, form: { type: "string", enum: ["liquid", "solid"] }, quantity: { type: "number" }, unit: { type: "string", enum: ["ml", "g"] }, concentration: { type: "string" } }, required: ["equipmentId", "name", "form", "quantity", "unit"] } },
+                { name: "transferLiquid", description: "Chuyển chất lỏng từ dụng cụ này sang dụng cụ khác.", parameters: { type: "object", properties: { sourceId: { type: "string" }, destinationId: { type: "string" }, quantity: { type: "number" } }, required: ["sourceId", "destinationId", "quantity"] } },
+                { name: "stir", description: "Khuấy dung dịch.", parameters: { type: "object", properties: { equipmentId: { type: "string" }, duration_seconds: { type: "number" } }, required: ["equipmentId", "duration_seconds"] } },
+                { name: "showReactionEffect", description: "Hiển thị hiệu ứng phản ứng.", parameters: { type: "object", properties: { effect: { type: "string", enum: ["precipitate", "fizzing"] }, productName: { type: "string" }, equipmentId: { type: "string" } }, required: ["effect", "productName", "equipmentId"] } },
+                { name: "createEquipmentFromDrawings", description: "Biến các hình đã vẽ thành dụng cụ hóa học.", parameters: { type: "object", properties: { objects: { type: "array", items: { type: "object", properties: { drawingIndex: { type: "number" }, label: { type: "string" }, type: { type: "string", "enum": ["beaker", "graduatedCylinder"] }, capacity: {type: "number"} }, required: ["drawingIndex", "label", "type"] } } } } },
+            ] }],
+            systemInstruction: "Bạn là một AI thực thi trong phòng thí nghiệm ảo. Nhiệm vụ của bạn là thực hiện các yêu cầu của người dùng bằng cách gọi các công cụ (hàm) có sẵn. QUY TRÌNH QUAN TRỌNG: 1. Để 'cân' một chất rắn, bạn BẮT BUỘC phải dùng `weighSolid` để đặt chất đó lên một cái cân. 2. Sau khi cân, nếu người dùng yêu cầu 'cho vào' hoặc 'chuyển', bạn mới dùng `transferSolid`. 3. Nếu người dùng đã vẽ hình, bạn PHẢI ưu tiên gọi hàm `createEquipmentFromDrawings` để biến các hình vẽ đó thành dụng cụ."
+        });
+
+        const plannerModel = getGenerativeModel(ai, {
+            model: "gemini-2.0-flash",
+            tools: [{ functionDeclarations: [ { name: "finalizeExperiment", description: "Tổng kết cuộc thảo luận và trích xuất ra một kế hoạch các bước thí nghiệm để thực thi.", parameters: { type: "object", properties: { steps: { type: "array", description: "Một mảng các bước hành động.", items: { type: "object", properties: { description: { type: "string", description: "Mô tả bước bằng ngôn ngữ tự nhiên." }, prompt: { type: "string", description: "Lệnh chính xác để người dùng gửi cho AI Thực thi." } } } } }, required: ["steps"] } } ] }],
+            systemInstruction: "Bạn là một trợ lý hóa học thông thái. Nhiệm vụ của bạn là thảo luận và lên kế hoạch thí nghiệm cùng người dùng. Hãy sử dụng định dạng Markdown. Khi người dùng yêu cầu, hãy sử dụng công cụ 'finalizeExperiment' để tổng kết kế hoạch."
+        });
+        let assistantChat;
+        function openSuggestionModal() {
+            dom.suggestionModal.style.display = 'flex';
+            assistantChat = plannerModel.startChat();
+        }
+        function closeSuggestionModal() { dom.suggestionModal.style.display = 'none'; }
+
+        async function callExecutorAPI(promptText) {
+            if (!promptText && finalizedDrawings.length === 0) return;
+            const allButtons = [dom.sendPromptButton, dom.startReactionButton, dom.suggestionButton, dom.resetButton];
+            allButtons.forEach(btn => { btn.disabled = true; });
+            dom.buttonText.classList.add('hidden');
+            dom.buttonSpinner.classList.remove('hidden');
+            logAction('user-request', `<strong>USER:</strong> ${promptText}`);
+
+            try {
+                let fullPrompt = promptText;
+                if (finalizedDrawings.length > 0) {
+                    let drawingContext = `Bối cảnh: Người dùng đã vẽ ${finalizedDrawings.length} hình. Hãy phân tích các hình vẽ này và yêu cầu của người dùng.`;
+                    fullPrompt = `${drawingContext}\n\nYêu cầu: ${promptText}`;
+                }
+                
+                if (!executorChat) {
+                    executorChat = executorModel.startChat();
+                }
+                
+                let result = await executorChat.sendMessage(fullPrompt);
+                
+                while (true) {
+                    const functionCalls = (result && result.response && typeof result.response.functionCalls === 'function') ? result.response.functionCalls() : null;
+                    if (!functionCalls || functionCalls.length === 0) {
+                        const responseText = (result && result.response && typeof result.response.text === 'function') ? result.response.text() : "Đã hoàn thành.";
+                        logAction('ai-response', `<strong>GEMINI:</strong> ${responseText}`);
+                        break; 
+                    }
+                    
+                    logAction('function-call', `<strong>GEMINI:</strong> Yêu cầu gọi [${functionCalls.map(fc => `${fc.name}(${JSON.stringify(fc.args)})`).join(', ')}]`);
+                    
+                    const toolParts = [];
+                    for (const call of functionCalls) {
+                        const func = availableFunctions[call.name];
+                        if (func) {
+                            const funcResult = await func(call.args);
+                            toolParts.push({ functionResponse: { name: call.name, response: funcResult } });
+                        }
+                    }
+                    logAction('function-result', `<strong>APP:</strong> Đã chạy hàm, gửi lại kết quả.`);
+                    result = await executorChat.sendMessage(toolParts);
+                }
+                const planSteps = document.querySelectorAll('.plan-step-item');
+                planSteps.forEach(step => {
+                    if (step.dataset.prompt === promptText.trim() && !step.classList.contains('completed')) {
+                        step.classList.add('completed');
+                    }
+                });
+
+            } catch (error) {
+                console.error("Executor API Error:", error);
+                logAction('error', `<strong>Lỗi:</strong> ${error.message}.`);
+            } finally {
+                allButtons.forEach(btn => { btn.disabled = false; });
+                dom.buttonText.classList.remove('hidden');
+                dom.buttonSpinner.classList.add('hidden');
+            }
+        }
+        
+        async function handleStartReaction() {
+            const reactionBeaker = labState.equipment.find(e => e.type === 'beaker' && e.contents.filter(c => c.form === 'liquid' || c.form === 'solid').length > 1);
+            if (!reactionBeaker) {
+                logAction('system', '<strong>APP:</strong> Không tìm thấy cốc nào đủ điều kiện để phản ứng.');
+                return;
+            }
+
+            const allButtons = [dom.sendPromptButton, dom.startReactionButton, dom.suggestionButton, dom.resetButton];
+            allButtons.forEach(btn => { btn.disabled = true; });
+            dom.reactionBtnText.classList.add('hidden');
+            dom.reactionBtnSpinner.classList.remove('hidden');
+            
+            const reactantNames = reactionBeaker.contents.map(c => c.name.replace(' (hòa tan)', '')).join(' và ');
+            logAction('user-request', `<strong>USER (auto):</strong> Bắt đầu phản ứng giữa ${reactantNames} trong '${reactionBeaker.label}'.`);
+
+            try {
+                const predictionModel = getGenerativeModel(ai, { model: "gemini-2.0-flash" });
+                const prompt = `Mô tả ngắn gọn sản phẩm chính và hiện tượng quan sát được (kết tủa, sủi bọt khí, đổi màu) khi cho ${reactantNames} phản ứng với nhau. Chỉ trả lời với định dạng JSON: {"productName": "Tên sản phẩm", "phenomenon": "precipitate" | "fizzing" | "colorChange", "details": "mô tả ngắn, ví dụ: 'trắng', 'không màu', 'xanh lam'"}. Nếu không có phản ứng, trả về {"phenomenon": "none"}.`;
+                
+                const result = await predictionModel.generateContent(prompt);
+                const textResponse = result.response.text();
+                const jsonString = textResponse.match(/{.*}/s)[0];
+                const reactionData = JSON.parse(jsonString);
+
+                logAction('ai-response', `<strong>GEMINI (dự đoán):</strong> Phản ứng tạo ra ${reactionData.productName} với hiện tượng ${reactionData.phenomenon}.`);
+
+                if (reactionData.phenomenon === 'precipitate') {
+                    if (reactionData.productName && !chemicalColors[reactionData.productName]) {
+                        await availableFunctions.researchChemical({ chemicalName: reactionData.productName });
+                    }
+                    await availableFunctions.showReactionEffect({ effect: 'precipitate', productName: reactionData.productName, equipmentId: reactionBeaker.label });
+                    reactionBeaker.contents.push({ name: reactionData.productName, form: 'solid', isPrecipitate: true, color: chemicalColors[reactionData.productName] || colorNameToRGBA['default'] });
+                } else if (reactionData.phenomenon === 'fizzing') {
+                    await availableFunctions.showReactionEffect({ effect: 'fizzing', productName: reactionData.productName, equipmentId: reactionBeaker.label });
+                } else if (reactionData.phenomenon === 'colorChange') {
+                    await availableFunctions.changeSolutionColor({ equipmentId: reactionBeaker.label, newColorName: reactionData.details });
+                } else {
+                    logAction('system', '<strong>APP:</strong> Không có phản ứng nào xảy ra.');
+                }
+
+            } catch (error) {
+                console.error("Reaction Prediction Error:", error);
+                logAction('error', `<strong>Lỗi:</strong> Không thể dự đoán phản ứng. ${error.message}`);
+            } finally {
+                allButtons.forEach(btn => { btn.disabled = false; });
+                dom.reactionBtnText.classList.remove('hidden');
+                dom.reactionBtnSpinner.classList.add('hidden');
+            }
+        }
+
+        function appendAssistantMessage(sender, text) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `assistant-chat-message ${sender}`;
+            messageDiv.innerHTML = marked.parse(text);
+            dom.assistantChatHistory.appendChild(messageDiv);
+            dom.assistantChatHistory.scrollTop = dom.assistantChatHistory.scrollHeight;
+        }
+
+        async function sendAssistantMessage() {
+            const userPrompt = dom.assistantPromptInput.value.trim();
+            if (!userPrompt || !assistantChat) return;
+
+            dom.assistantPromptInput.disabled = true;
+            dom.assistantSendButton.disabled = true;
+            appendAssistantMessage('user', userPrompt);
+            dom.assistantPromptInput.value = '';
+
+            try {
+                let result = await assistantChat.sendMessage(userPrompt);
+
+                while (true) {
+                    const functionCalls = (result && result.response && typeof result.response.functionCalls === 'function') ? result.response.functionCalls() : null;
+                    
+                    if (!functionCalls || functionCalls.length === 0) {
+                        const responseText = (result && result.response && typeof result.response.text === 'function') ? result.response.text() : "Xin lỗi, tôi không thể xử lý yêu cầu này.";
+                        appendAssistantMessage('assistant', responseText);
+                        break;
+                    }
+
+                    const toolParts = [];
+                    for (const call of functionCalls) {
+                        const func = availableFunctions[call.name];
+                        if (func) {
+                            const funcResult = await func(call.args);
+                            if (call.name === 'finalizeExperiment') {
+                                appendAssistantMessage('assistant', "Tuyệt vời! Kế hoạch đã được chuyển ra màn hình chính. Bạn có thể đóng cửa sổ này và bắt đầu thực hiện từng bước.");
+                                return;
+                            }
+                            toolParts.push({ functionResponse: { name: call.name, response: funcResult } });
+                        }
+                    }
+                    result = await assistantChat.sendMessage(toolParts);
+                }
+            } catch (error) {
+                console.error("Planner API Error:", error);
+                appendAssistantMessage('assistant', `Đã xảy ra lỗi: ${error.message}`);
+            } finally {
+                dom.assistantPromptInput.disabled = false;
+                dom.assistantSendButton.disabled = false;
+                dom.assistantPromptInput.focus();
+            }
+        }
+        
+        // --- QUẢN LÝ SCENE (LƯU/TẢI THÍ NGHIỆM) ---
+        const SCENE_STORAGE_KEY = 'chemistry_lab_scenes_v1';
+
+        function getSavedScenes() { return JSON.parse(localStorage.getItem(SCENE_STORAGE_KEY) || '{}'); }
+        
+        function saveCurrentScene() {
+            const sceneName = dom.sceneNameInput.value.trim();
+            if (!sceneName) { 
+                showConfirmationModal('Lỗi', 'Vui lòng nhập tên thí nghiệm!', () => {}, true);
+                return;
+             }
+            const scenes = getSavedScenes();
+            scenes[sceneName] = {
+                state: labState,
+                timestamp: new Date().toISOString()
+            };
+            localStorage.setItem(SCENE_STORAGE_KEY, JSON.stringify(scenes));
+            dom.sceneNameInput.value = '';
+            populateScenesList();
+            showToast(`Đã lưu thí nghiệm '${sceneName}'.`, 'system');
+        }
+
+        function loadScene(sceneName) {
+            const sceneData = getSavedScenes()[sceneName];
+            if (!sceneData) return;
+            labState = JSON.parse(JSON.stringify(sceneData.state));
+            dom.sceneManagerModal.classList.add('hidden');
+            logAction('system', `<strong>APP:</strong> Đã tải thí nghiệm '${sceneName}'.`);
+        }
+
+        function deleteScene(sceneName) {
+            const scenes = getSavedScenes();
+            delete scenes[sceneName];
+            localStorage.setItem(SCENE_STORAGE_KEY, JSON.stringify(scenes));
+            populateScenesList();
+        }
+
+        function populateScenesList() {
+            const scenes = getSavedScenes();
+            dom.savedScenesList.innerHTML = '';
+            if (Object.keys(scenes).length === 0) {
+                dom.savedScenesList.innerHTML = `<p class="text-slate-500 text-center p-4">Chưa có thí nghiệm nào được lưu.</p>`;
+                return;
+            }
+            for (const name in scenes) {
+                const sceneEl = document.createElement('div');
+                sceneEl.className = 'flex justify-between items-center p-3 bg-slate-800/70 rounded-lg';
+                sceneEl.innerHTML = `
+                    <div>
+                        <p class="font-semibold text-white">${name}</p>
+                        <p class="text-xs text-slate-400">Đã lưu: ${new Date(scenes[name].timestamp).toLocaleString()}</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button class="load-btn btn p-2 bg-primary rounded-md" data-name="${name}" title="Tải"><i data-lucide="download" class="w-4 h-4 text-white pointer-events-none"></i></button>
+                        <button class="delete-btn btn p-2 bg-red-600 rounded-md" data-name="${name}" title="Xóa"><i data-lucide="trash-2" class="w-4 h-4 text-white pointer-events-none"></i></button>
+                    </div>
+                `;
+                dom.savedScenesList.appendChild(sceneEl);
+            }
+            lucide.createIcons();
+        }
+        
+        // --- LOGIC CÁC MODAL ---
+        let confirmCallback = null;
+        function showConfirmationModal(title, message, onConfirm, isAlert = false) {
+            dom.confirmationTitle.textContent = title;
+            dom.confirmationMessage.textContent = message;
+            confirmCallback = onConfirm;
+            dom.confirmCancelButton.classList.toggle('hidden', isAlert);
+            dom.confirmActionButton.textContent = isAlert ? 'OK' : 'Xác nhận';
+            dom.confirmationModal.classList.remove('hidden');
+        }
+        function hideConfirmationModal() { dom.confirmationModal.classList.add('hidden'); confirmCallback = null; }
+        
+        // --- LOGIC CÔNG CỤ VẼ ---
+        function startDraw(event) {
+            if (!activeDrawTool) return;
+            isDrawing = true;
+            drawStartPoint = { x: event.offsetX, y: event.offsetY };
+            currentDrawing = { type: activeDrawTool };
+            if (activeDrawTool === 'freeform') currentDrawing.path = [drawStartPoint];
+        }
+        function draw(event) {
+            if (!isDrawing || !drawStartPoint) return;
+            const currentPoint = { x: event.offsetX, y: event.offsetY };
+            switch (activeDrawTool) {
+                case 'freeform': currentDrawing.path.push(currentPoint); break;
+                case 'box':
+                    currentDrawing.x = Math.min(drawStartPoint.x, currentPoint.x);
+                    currentDrawing.y = Math.min(drawStartPoint.y, currentPoint.y);
+                    currentDrawing.w = Math.abs(drawStartPoint.x - currentPoint.x);
+                    currentDrawing.h = Math.abs(drawStartPoint.y - currentPoint.y);
+                    break;
+            }
+        }
+        function endDraw() {
+            if (!isDrawing) return;
+            isDrawing = false;
+            if (currentDrawing.type === 'box' && (!currentDrawing.w || currentDrawing.w < 5 || !currentDrawing.h || currentDrawing.h < 5)) {
+                currentDrawing = {}; return;
+            }
+            finalizedDrawings.push({ ...currentDrawing });
+            currentDrawing = {};
+        }
+        function toggleDrawTool(tool) {
+            if (activeDrawTool) {
+                document.querySelector(`.draw-tool[data-tool="${activeDrawTool}"]`)?.classList.remove('active');
+                dom.canvas.classList.remove('drawing-mode');
+            }
+            if (activeDrawTool === tool) {
+                activeDrawTool = null;
+                return;
+            }
+            activeDrawTool = tool;
+            document.querySelector(`.draw-tool[data-tool="${tool}"]`)?.classList.add('active');
+            dom.canvas.classList.add('drawing-mode');
+        }
+        function clearAllDrawings() {
+            finalizedDrawings = [];
+            currentDrawing = {};
+        }
+
+        // --- GẮN KẾT SỰ KIỆN VÀ KHỞI TẠO ---
+        dom.sendPromptButton.addEventListener("click", () => callExecutorAPI(dom.promptInput.value.trim()));
+        dom.promptInput.addEventListener("keydown", (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); dom.sendPromptButton.click(); }
+        });
+        dom.startReactionButton.addEventListener("click", handleStartReaction);
+        dom.resetButton.addEventListener("click", () => {
+             showConfirmationModal('Dọn dẹp Phòng thí nghiệm?', 'Hành động này sẽ xóa tất cả dụng cụ và tiến trình. Bạn có chắc chắn?', () => {
+                availableFunctions.resetLab();
+                logAction('system', '<strong>APP:</strong> Phòng thí nghiệm đã được dọn dẹp.');
+            });
+        });
+        
+        dom.openSidebarButton.addEventListener('click', () => { dom.leftSidebar.classList.add('open'); dom.sidebarBackdrop.classList.remove('hidden'); });
+        function closeSidebar() { dom.leftSidebar.classList.remove('open'); dom.sidebarBackdrop.classList.add('hidden'); }
+        dom.sidebarBackdrop.addEventListener('click', closeSidebar);
+        dom.togglePanelButton.addEventListener('click', () => {
+            dom.bottomPanel.classList.toggle('translate-y-[calc(100%-4rem)]');
+            dom.toggleIcon.classList.toggle('rotate-180');
+        });
+        dom.suggestionButton.addEventListener("click", openSuggestionModal);
+        dom.closeSuggestionModal.addEventListener("click", closeSuggestionModal);
+        dom.assistantSendButton.addEventListener("click", sendAssistantMessage);
+        dom.assistantPromptInput.addEventListener("keypress", (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); sendAssistantMessage(); }
+        });
+        dom.openTutorialButton.addEventListener('click', () => dom.tutorialModal.classList.remove('hidden'));
+        dom.closeTutorialButton.addEventListener('click', () => dom.tutorialModal.classList.add('hidden'));
+        dom.confirmCancelButton.addEventListener('click', hideConfirmationModal);
+        dom.confirmActionButton.addEventListener('click', () => { if (confirmCallback) confirmCallback(); hideConfirmationModal(); });
+        
+        dom.openSceneManager.addEventListener('click', () => { populateScenesList(); dom.sceneManagerModal.classList.remove('hidden'); });
+        dom.closeSceneManager.addEventListener('click', () => dom.sceneManagerModal.classList.add('hidden'));
+        dom.saveSceneButton.addEventListener('click', saveCurrentScene);
+        dom.savedScenesList.addEventListener('click', (e) => {
+            const target = e.target.closest('button');
+            if (!target) return;
+            const sceneName = target.dataset.name;
+            if (target.classList.contains('load-btn')) {
+                loadScene(sceneName);
+            } else if (target.classList.contains('delete-btn')) {
+                showConfirmationModal('Xóa Thí nghiệm?', `Bạn có chắc muốn xóa vĩnh viễn thí nghiệm "${sceneName}" không?`, () => deleteScene(sceneName));
+            }
+        });
+
+        dom.actionLog.addEventListener('click', (e) => {
+            if (e.target.classList.contains('equipment-label')) {
+                const label = e.target.dataset.label;
+                const equipment = labState.equipment.find(eq => eq.label === label);
+                if (equipment) {
+                    equipment.isHighlighted = true;
+                    setTimeout(() => {
+                        equipment.isHighlighted = false;
+                    }, 1000);
+                }
+            }
+        });
+
+        dom.drawTools.forEach(button => button.addEventListener('click', () => toggleDrawTool(button.dataset.tool)));
+        dom.clearDrawingsButton.addEventListener('click', clearAllDrawings);
+
+        window.onload = () => {
+            drawLab();
+            lucide.createIcons();
+        };
+    </script>
+</body>
+</html>
