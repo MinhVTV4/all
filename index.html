@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Physics Simulator v7.5 - Ground & Gravity Tune</title>
+    <title>AI Physics Simulator v7.6 - Polygon Tool</title>
     
     <!-- Tích hợp Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -171,6 +171,7 @@
                                 <h4 class="font-semibold text-primary mb-2 flex items-center gap-2"><i data-lucide="pencil-ruler" class="w-5 h-5"></i>5. Bộ Công cụ Vẽ</h4>
                                 <p>Chọn một công cụ để bắt đầu vẽ trên không gian mô phỏng. Sau khi vẽ xong, bạn có thể ra lệnh cho AI.</p>
                                 <ul class="list-disc list-inside space-y-1 pl-2 mt-1 text-sm">
+                                    <li><strong class="text-white">Đa giác:</strong> Nhấp chuột để tạo các đỉnh. Nhấp vào đỉnh đầu tiên hoặc nhấn Enter để hoàn thành. Nhấn Esc để hủy.</li>
                                     <li><strong class="text-white">Hộp, Bóng, Tự do:</strong> Tạo các vật thể rắn cơ bản.</li>
                                     <li><strong class="text-white">Hành tinh:</strong> Tạo một thiên thể tĩnh, có lực hấp dẫn mạnh.</li>
                                     <li><strong class="text-white">Vật mềm:</strong> Tạo vật thể có thể biến dạng như vải hoặc thạch.</li>
@@ -222,7 +223,7 @@
         <aside id="left-sidebar" style="--sidebar-width: 26rem;" class="w-[var(--sidebar-width)] bg-slate-800/60 p-6 flex flex-col shadow-2xl border-r border-slate-700">
             <div class="flex-shrink-0 mb-6 flex justify-between items-center">
                 <h1 class="text-2xl font-black text-white tracking-tighter">AI Physics <span class="text-primary">Simulator</span></h1>
-                <span class="text-xs bg-accent/80 text-white font-bold px-2 py-1 rounded-full">v7.5</span>
+                <span class="text-xs bg-accent/80 text-white font-bold px-2 py-1 rounded-full">v7.6</span>
             </div>
 
             <!-- Khu vực nhập liệu -->
@@ -252,8 +253,9 @@
                             <i data-lucide="eraser" class="w-4 h-4"></i> Xóa hình vẽ
                         </button>
                     </div>
-                     <div class="grid grid-cols-4 gap-2">
+                     <div class="grid grid-cols-5 gap-2">
                          <button class="draw-tool p-3 rounded-lg bg-slate-700/50 hover:bg-slate-700 flex flex-col items-center gap-1 text-xs" data-tool="freeform" title="Vẽ Tự do"><i data-lucide="pencil" class="w-5 h-5"></i><span>Tự do</span></button>
+                         <button class="draw-tool p-3 rounded-lg bg-slate-700/50 hover:bg-slate-700 flex flex-col items-center gap-1 text-xs" data-tool="polygon" title="Vẽ Đa giác (Nhấn Enter để hoàn thành)"><i data-lucide="hexagon" class="w-5 h-5 text-sky-400"></i><span>Đa giác</span></button>
                          <button class="draw-tool p-3 rounded-lg bg-slate-700/50 hover:bg-slate-700 flex flex-col items-center gap-1 text-xs" data-tool="box" title="Vẽ Hộp"><i data-lucide="square" class="w-5 h-5"></i><span>Hộp</span></button>
                          <button class="draw-tool p-3 rounded-lg bg-slate-700/50 hover:bg-slate-700 flex flex-col items-center gap-1 text-xs" data-tool="circle" title="Vẽ Bóng"><i data-lucide="circle" class="w-5 h-5"></i><span>Bóng</span></button>
                          <button class="draw-tool p-3 rounded-lg bg-slate-700/50 hover:bg-slate-700 flex flex-col items-center gap-1 text-xs" data-tool="planet" title="Vẽ Hành tinh (Hút các vật thể)"><i data-lucide="sun" class="w-5 h-5 text-yellow-400"></i><span>Hành tinh</span></button>
@@ -525,7 +527,6 @@
         const { Engine, Render, Runner, World, Bodies, Composite, Composites, Mouse, MouseConstraint, Body, Constraint, Events, Vertices, Vector } = Matter;
         
         const PIXELS_PER_METER = 100;
-        // SỬA ĐỔI: Tinh chỉnh hằng số hấp dẫn để quỹ đạo ổn định hơn
         const G_SCALED = 0.01; 
         let labObjects = {}; 
         let activeWaveGenerators = {};
@@ -544,6 +545,7 @@
         let selectedDrawingIndex = -1;
         let firstConnectionPoint = null;
         let firstConnectionDrawingIndex = null;
+        let polygonPreviewPoint = null; // Nâng cấp: Biến cho đường preview của đa giác
 
         // New feature variables
         let isTrailEnabled = false;
@@ -563,7 +565,7 @@
         // Matter.js setup
         const engine = Engine.create();
         const world = engine.world;
-        engine.gravity.y = 1; // Bắt đầu với trọng lực mặc định
+        engine.gravity.y = 1; 
         engine.world.frictionAir = 0.01;
 
         const render = Render.create({
@@ -639,6 +641,18 @@
                                 for (let i = 1; i < drawing.path.length; i++) ctx.lineTo(drawing.path[i].x, drawing.path[i].y);
                             }
                             break;
+                        // Nâng cấp: Logic vẽ cho đa giác
+                        case 'polygon':
+                            if (drawing.path && drawing.path.length > 0) {
+                                ctx.moveTo(drawing.path[0].x, drawing.path[0].y);
+                                for (let i = 1; i < drawing.path.length; i++) {
+                                    ctx.lineTo(drawing.path[i].x, drawing.path[i].y);
+                                }
+                                if (!isFinalized && polygonPreviewPoint) {
+                                    ctx.lineTo(polygonPreviewPoint.x, polygonPreviewPoint.y);
+                                }
+                            }
+                            break;
                         case 'box': ctx.rect(drawing.x, drawing.y, drawing.w, drawing.h); break;
                         case 'circle': ctx.arc(drawing.x, drawing.y, drawing.r, 0, Math.PI * 2); break;
                         case 'planet': 
@@ -661,6 +675,15 @@
                     ctx.stroke();
                 }
             });
+            
+            // Nâng cấp: Vẽ điểm bắt đầu của đa giác để dễ dàng đóng hình
+            if (isDrawing && currentDrawing.type === 'polygon' && currentDrawing.path && currentDrawing.path.length > 0) {
+                ctx.fillStyle = '#f59e0b';
+                ctx.beginPath();
+                ctx.arc(currentDrawing.path[0].x, currentDrawing.path[0].y, 6, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
 
             // Vẽ các kết nối đã tạo
             finalizedConstraints.forEach(constraint => {
@@ -737,11 +760,10 @@
             gravitySources = [];
             clearAllDrawings();
 
-            // SỬA ĐỔI: Thêm mặt đất
             const ground = Bodies.rectangle(
                 dom.canvasContainer.clientWidth / 2, 
                 dom.canvasContainer.clientHeight + 30, 
-                dom.canvasContainer.clientWidth * 2, // Làm mặt đất rộng hơn để tránh vật thể lọt qua ở cạnh
+                dom.canvasContainer.clientWidth * 2, 
                 60, 
                 { isStatic: true, render: { fillStyle: '#475569' }, label: 'ground' }
             );
@@ -948,6 +970,7 @@
                         render: { fillStyle: '#a78bfa' } 
                     };
                     switch (drawing.type) {
+                        case 'polygon': // Nâng cấp: Xử lý đa giác
                         case 'freeform':
                             if (!drawing.path || drawing.path.length < 3) { createdBodies[index] = null; return; }
                             try {
@@ -1254,7 +1277,10 @@
             // Cập nhật biểu đồ
             if (selectedBodies.length > 0 && motionChart && isSimulationRunning) {
                 const timeInSeconds = (performance.now() - startTime) / 1000;
-                if (chartData.labels.length > 100) { chartData.labels.shift(); chartData.datasets.forEach(ds => ds.data.shift()); }
+                if (chartData.labels.length > 200) { 
+                    chartData.labels.shift(); 
+                    chartData.datasets.forEach(ds => ds.data.shift()); 
+                }
                 chartData.labels.push(timeInSeconds.toFixed(1));
                 
                 selectedBodies.forEach((body, index) => {
@@ -1271,7 +1297,10 @@
                     if (chartData.datasets[kineticEnergyDatasetIndex]) chartData.datasets[kineticEnergyDatasetIndex].data.push(kineticEnergy);
                 });
 
-                motionChart.update('none');
+                // FIX: Only call update if the panel is visible to prevent rendering errors
+                if (!dom.bottomPanel.classList.contains('translate-y-[calc(100%-4rem)]')) {
+                    motionChart.update('none');
+                }
             }
         }
         Events.on(engine, 'beforeUpdate', updateSimulationData);
@@ -1359,7 +1388,6 @@
             else dom.statusMessage.classList.add('text-slate-400');
         }
 
-        // SỬA ĐỔI: Khởi tạo lại chat session mỗi lần nhấn nút để đảm bảo yêu cầu độc lập
         dom.sendPromptButton.addEventListener("click", () => {
              const modelWithTools = getGenerativeModel(getAI(app, { backend: new GoogleAIBackend() }), { model: "gemini-2.5-flash", tools: [{ functionDeclarations }] });
              chat = modelWithTools.startChat();
@@ -1379,6 +1407,10 @@
         dom.togglePanelButton.addEventListener('click', () => {
             dom.bottomPanel.classList.toggle('translate-y-[calc(100%-4rem)]');
             dom.toggleIcon.classList.toggle('rotate-180');
+            // FIX: Update the chart with buffered data when panel is opened
+            if (motionChart && !dom.bottomPanel.classList.contains('translate-y-[calc(100%-4rem)]')) {
+                motionChart.update();
+            }
         });
 
         dom.playPauseButton.addEventListener('click', () => {
@@ -1500,6 +1532,69 @@
             finalizedDrawings.push({ ...currentDrawing });
             currentDrawing = {};
         }
+
+        // Nâng cấp: Các hàm mới cho công cụ vẽ đa giác
+        function handlePolygonMouseMove(event) {
+            if (isDrawing && activeDrawTool === 'polygon') {
+                polygonPreviewPoint = { x: event.offsetX, y: event.offsetY };
+            }
+        }
+
+        function endPolygonDraw(closeLoop = true) {
+            if (!isDrawing || activeDrawTool !== 'polygon' || !currentDrawing.path) {
+                return;
+            }
+            if (currentDrawing.path.length < 3) {
+                 // Hủy vẽ nếu không đủ điểm
+                isDrawing = false;
+                currentDrawing = {};
+                polygonPreviewPoint = null;
+                toggleDrawTool(activeDrawTool); // Tắt công cụ
+                return;
+            }
+            isDrawing = false;
+            polygonPreviewPoint = null;
+            finalizedDrawings.push({ ...currentDrawing });
+            currentDrawing = {};
+            toggleDrawTool(activeDrawTool); // Tắt công cụ sau khi vẽ xong
+        }
+
+        function handlePolygonClick(event) {
+            if (activeDrawTool !== 'polygon') return;
+            const clickPoint = { x: event.offsetX, y: event.offsetY };
+
+            if (!isDrawing) {
+                // Bắt đầu một đa giác mới
+                isDrawing = true;
+                currentDrawing = { type: 'polygon', path: [clickPoint], properties: {} };
+            } else {
+                // Tiếp tục vẽ
+                const startPoint = currentDrawing.path[0];
+                const dx = clickPoint.x - startPoint.x;
+                const dy = clickPoint.y - startPoint.y;
+                // Kiểm tra xem có nhấp vào điểm bắt đầu để đóng hình không
+                if (currentDrawing.path.length > 2 && Math.sqrt(dx * dx + dy * dy) < 10) { // dung sai 10px
+                    endPolygonDraw(true);
+                } else {
+                    currentDrawing.path.push(clickPoint);
+                }
+            }
+        }
+
+        function handleKeyDown(event) {
+            if (isDrawing && activeDrawTool === 'polygon') {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    endPolygonDraw(true);
+                } else if (event.key === 'Escape') {
+                    event.preventDefault();
+                    endPolygonDraw(false); // Hủy
+                }
+            }
+        }
+        window.addEventListener('keydown', handleKeyDown);
+
+
         function getDrawingCenter(drawing) {
             if (!drawing) return null;
             switch (drawing.type) {
@@ -1510,6 +1605,7 @@
                 case 'box': 
                 case 'softbody':
                     return { x: drawing.x + drawing.w / 2, y: drawing.y + drawing.h / 2 };
+                case 'polygon': // Nâng cấp
                 case 'freeform': return Vertices.centre(drawing.path);
                 case 'wall': return { x: (drawing.x1 + drawing.x2) / 2, y: (drawing.y1 + drawing.y2) / 2 };
                 default: return null;
@@ -1536,9 +1632,13 @@
                 toggleDrawTool(activeDrawTool);
             }
         }
+
+        // Nâng cấp: Tách các loại công cụ để quản lý event listener
         function toggleDrawTool(tool) {
-            const isShapeTool = ['box', 'circle', 'wall', 'motor', 'planet', 'softbody', 'freeform'].includes(tool);
+            const isDragTool = ['box', 'circle', 'wall', 'motor', 'planet', 'softbody', 'freeform'].includes(tool);
             const isConnectionTool = ['joint', 'spring'].includes(tool);
+            const isPolygonTool = tool === 'polygon';
+
             if (activeDrawTool) {
                 document.querySelector(`.draw-tool[data-tool="${activeDrawTool}"]`)?.classList.remove('active');
                 render.canvas.classList.remove('drawing-mode');
@@ -1547,22 +1647,31 @@
                 render.canvas.removeEventListener('mousemove', draw);
                 render.canvas.removeEventListener('mouseup', endDraw);
                 render.canvas.removeEventListener('mousedown', handleConnectionClick);
+                render.canvas.removeEventListener('mousedown', handlePolygonClick);
+                render.canvas.removeEventListener('mousemove', handlePolygonMouseMove);
                 firstConnectionPoint = null;
                 firstConnectionDrawingIndex = null;
+                if (isDrawing && currentDrawing.type === 'polygon') {
+                    endPolygonDraw(false); // Hủy đa giác đang vẽ nếu chuyển công cụ
+                }
             }
             if (activeDrawTool === tool) { activeDrawTool = null; return; }
             activeDrawTool = tool;
             document.querySelector(`.draw-tool[data-tool="${tool}"]`)?.classList.add('active');
             render.canvas.classList.add('drawing-mode');
             mouseConstraint.constraint.stiffness = 0;
-            if (isShapeTool) {
+            if (isDragTool) {
                 render.canvas.addEventListener('mousedown', startDraw);
                 render.canvas.addEventListener('mousemove', draw);
                 render.canvas.addEventListener('mouseup', endDraw);
             } else if (isConnectionTool) {
                 render.canvas.addEventListener('mousedown', handleConnectionClick);
+            } else if (isPolygonTool) {
+                render.canvas.addEventListener('mousedown', handlePolygonClick);
+                render.canvas.addEventListener('mousemove', handlePolygonMouseMove);
             }
         }
+
         dom.drawTools.forEach(button => button.addEventListener('click', () => toggleDrawTool(button.dataset.tool)));
         function isPointInPolygon(point, polygon) {
             if (!polygon) return false;
@@ -1583,6 +1692,7 @@
                 case 'box': 
                 case 'softbody':
                     return (point.x > drawing.x && point.x < drawing.x + drawing.w && point.y > drawing.y && point.y < drawing.y + drawing.h);
+                case 'polygon': // Nâng cấp
                 case 'freeform': return isPointInPolygon(point, drawing.path);
                 case 'wall':
                 default: return false;
@@ -1730,7 +1840,6 @@
 
         // --- Khôi phục các ví dụ ---
         const examplePrompts = {
-            // SỬA ĐỔI: Cập nhật ví dụ hệ mặt trời với thông số ổn định hơn
             "Hệ mặt trời mini": "Tạo một hành tinh lớn tên 'mặt trời' ở (6, 5) với khối lượng 2000. Tạo một quả bóng tên 'trái đất' ở (6, 8) với vận tốc ngang 2.2 m/s để nó bay quanh mặt trời.",
             "Tấm vải rơi": "Tạo một vật thể mềm kích thước 4m x 3m ở (5, 6) với 10 cột và 8 hàng, và đặt tên là 'vai'. Sau đó cố định các hạt ở hàng trên cùng của 'vai'.",
             "Con lắc đơn": "Tạo một con lắc đơn dài 3m treo ở điểm (5m, 8m).",
@@ -1746,14 +1855,13 @@
         });
 
         // --- Quản lý kịch bản (Lưu/Tải) ---
-        const SCENE_STORAGE_KEY = 'physics_simulator_scenes_v7.5';
+        const SCENE_STORAGE_KEY = 'physics_simulator_scenes_v7.6';
 
         function getSavedScenes() { return JSON.parse(localStorage.getItem(SCENE_STORAGE_KEY) || '{}'); }
         function saveCurrentScene() {
             const sceneName = dom.sceneNameInput.value.trim();
             if (!sceneName) { 
                 showConfirmationModal('Lỗi', 'Vui lòng nhập tên kịch bản!', () => {});
-                // Thay thế alert bằng modal
                 const originalActionButtonText = dom.confirmActionButton.textContent;
                 dom.confirmActionButton.textContent = 'OK';
                 dom.confirmCancelButton.classList.add('hidden');
@@ -1886,7 +1994,6 @@
                         console.warn("Lỗi khi phát âm thanh va chạm:", e);
                     }
                 }
-                // Particle effects have been removed as requested.
             }
         });
 
